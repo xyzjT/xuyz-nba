@@ -43,21 +43,54 @@
 
   const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-  /* ---------- 个人收藏(主队 + 球星,localStorage 持久化) ---------- */
-  let my = (() => { try { return JSON.parse(localStorage.getItem('qiutan_my') || '{}'); } catch { return {}; } })();
-  if (!my.players) my.players = [];
-  function saveMy() { try { localStorage.setItem('qiutan_my', JSON.stringify(my)); } catch {} }
-  function isMyTeam(sport, id) { return my.team && my.team.sport === sport && my.team.id === id; }
-  function toggleMyTeam(sport, id, name, zh) {
-    if (isMyTeam(sport, id)) my.team = null;
-    else my.team = { sport, id, name, zh };
-    saveMy();
+  /* ---------- 球星 PK(内存态,同运动对战) ---------- */
+  let pkSlots = [];
+  function addPkSlot(slot) {
+    if (pkSlots.some(s => s.hash === slot.hash)) return; // 已在槽中
+    if (pkSlots.length >= 2) pkSlots = [];
+    if (pkSlots.length && pkSlots[0].sport !== slot.sport) pkSlots = []; // 跨运动则重置
+    pkSlots.push(slot);
+    updatePkBar();
   }
-  function isMyPlayer(hash) { return my.players.some(p => p.hash === hash); }
-  function toggleMyPlayer(name, zh, hash) {
-    if (isMyPlayer(hash)) my.players = my.players.filter(p => p.hash !== hash);
-    else { my.players.unshift({ name, zh, hash }); if (my.players.length > 20) my.players.pop(); }
-    saveMy();
+  function removePkSlot(hash) {
+    pkSlots = pkSlots.filter(s => s.hash !== hash);
+    updatePkBar();
+  }
+  function updatePkBar() {
+    let bar = $('#pk-bar');
+    if (!pkSlots.length) { if (bar) bar.remove(); return; }
+    if (!bar) {
+      bar = el('div');
+      bar.id = 'pk-bar';
+      document.body.appendChild(bar);
+    }
+    bar.innerHTML = '';
+    bar.appendChild(el('span', 'pk-title', '⚔️ 球星 PK'));
+    for (const s of pkSlots) {
+      const chip = el('span', 'pk-slot');
+      chip.appendChild(el('span', '', s.zh || s.name));
+      const rm = el('span', 'pk-remove', '✕');
+      chip.appendChild(rm);
+      chip.onclick = e => {
+        if (e.target.classList.contains('pk-remove')) removePkSlot(s.hash);
+      };
+      bar.appendChild(chip);
+    }
+    const go = el('button', 'btn-main', '开始 PK');
+    go.disabled = pkSlots.length < 2;
+    go.onclick = () => { location.hash = '#/pk'; };
+    bar.appendChild(go);
+  }
+
+  /* 球员页 PK 按钮:返回可复用的按钮节点 */
+  function pkButton(slot) {
+    const inSlots = pkSlots.some(s => s.hash === slot.hash);
+    const btn = el('button', 'btn-main fav-btn', inSlots ? '✓ 已选入 PK' : '⚔️ 选入 PK');
+    btn.onclick = () => {
+      if (inSlots) removePkSlot(slot.hash);
+      else addPkSlot(slot);
+    };
+    return btn;
   }
 
   /* 足球球队中文名模糊匹配(去重音/大小写),兜底英文 */
@@ -161,6 +194,7 @@
     const parts = hash.replace(/^#\//, '').split('/');
     const view = parts[0] || 'home';
     let sid = null;
+    if (view === 'pk') { renderPk(); return; }
     if (view === 'team' || view === 'player') {
       if (parts.length >= 3 && SPORTS[parts[1]]) { sport = parts[1]; sid = parts.slice(2).join('/'); }
       else { sport = 'basketball'; sid = parts[1]; } // 兼容旧链接
@@ -189,45 +223,9 @@
     $('#crumb-now').textContent = '';
     const view = $('#view');
     view.innerHTML = '';
-    renderMySection(view);
     if (sport === 'basketball') renderBasketballHome(view);
     else if (sport === 'football') renderFootballHome(view);
     else renderRacketHome(view); // 乒乓球/羽毛球
-  }
-
-  /* 「我的」区块:主队 + 收藏球星 */
-  function renderMySection(view) {
-    if (!my.team && !my.players.length) return;
-    view.appendChild(el('div', 'conf-title', '⭐ 我的关注'));
-    const wrap = el('div', 'my-section');
-    if (my.team) {
-      const card = el('div', 'my-team-card');
-      card.appendChild(el('span', 'my-badge', SPORTS[my.team.sport]?.icon + ' 主队'));
-      card.appendChild(el('div', 'my-team-name', my.team.zh || my.team.name));
-      card.appendChild(el('span', 'my-remove', '取消'));
-      card.onclick = e => {
-        if (e.target.classList.contains('my-remove')) { my.team = null; saveMy(); render(); return; }
-        location.hash = '#/team/' + (my.team.sport === 'football' ? 'football/' : '') + my.team.id;
-      };
-      wrap.appendChild(card);
-    }
-    const chips = el('div', 'player-chip-grid');
-    for (const p of my.players) {
-      const chip = el('div', 'player-chip');
-      const nmWrap = el('div', '');
-      nmWrap.appendChild(el('div', 'nm', p.name));
-      if (p.zh) nmWrap.appendChild(el('div', 'zh', p.zh));
-      chip.appendChild(nmWrap);
-      const rm = el('span', 'my-remove', '✕');
-      chip.appendChild(rm);
-      chip.onclick = e => {
-        if (e.target.classList.contains('my-remove')) { my.players = my.players.filter(x => x.hash !== p.hash); saveMy(); render(); return; }
-        location.hash = p.hash;
-      };
-      chips.appendChild(chip);
-    }
-    wrap.appendChild(chips);
-    view.appendChild(wrap);
   }
 
   function renderBasketballHome(view) {
@@ -287,7 +285,6 @@
       meta.appendChild(el('span', 'chip gold', '🏆 ' + (t.champs || 0) + ' 冠'));
       meta.appendChild(el('span', 'chip orange', '📍 ' + (live.arena || t.arena)));
       meta.appendChild(el('span', 'chip', t.div));
-      if (isMyTeam('basketball', t.id)) meta.appendChild(el('span', 'chip gold', '⭐ 主队'));
       card.appendChild(meta);
       card.onclick = () => { location.hash = hashOf(t); };
       grid.appendChild(card);
@@ -348,7 +345,6 @@
         const meta = el('div', 'tmeta');
         meta.appendChild(el('span', 'chip orange', '📍 ' + (item.t.arena || item.t.location || '')));
         meta.appendChild(el('span', 'chip', '👥 ' + item.rosterN + ' 人'));
-        if (isMyTeam('football', item.id)) meta.appendChild(el('span', 'chip gold', '⭐ 主队'));
         card.appendChild(meta);
         card.onclick = () => { location.hash = '#/team/football/' + item.id; };
         grid.appendChild(card);
@@ -416,9 +412,6 @@
     facts.appendChild(el('span', 'chip', t.div + ' · ' + t.conf + '联盟'));
     info.appendChild(facts);
     info.appendChild(el('div', 'desc', t.desc));
-    const favBtn = el('button', 'btn-main fav-btn', isMyTeam('basketball', t.id) ? '✓ 我的主队' : '☆ 设为主队');
-    favBtn.onclick = () => { toggleMyTeam('basketball', t.id, t.name, t.name); render(); };
-    info.appendChild(favBtn);
     head.appendChild(info);
     view.appendChild(head);
 
@@ -464,9 +457,6 @@
     facts.appendChild(el('span', 'chip', '联赛: ' + lg.zh));
     info.appendChild(facts);
     const zhT = zhOf(t.displayName);
-    const favBtn = el('button', 'btn-main fav-btn', isMyTeam('football', lgId + ':' + tId) ? '✓ 我的主队' : '☆ 设为主队');
-    favBtn.onclick = () => { toggleMyTeam('football', lgId + ':' + tId, t.displayName, zhT); render(); };
-    info.appendChild(favBtn);
     head.appendChild(info);
     view.appendChild(head);
 
@@ -542,10 +532,7 @@
     ml.appendChild(el('span', 'chip', '球衣 #' + (meta.jersey || '—')));
     ml.appendChild(el('span', 'chip gold', '🏀 实时数据'));
     info.appendChild(ml);
-    const h = '#/player/' + meta.id;
-    const favBtn = el('button', 'btn-main fav-btn', isMyPlayer(h) ? '✓ 已收藏' : '☆ 收藏球星');
-    favBtn.onclick = () => { toggleMyPlayer(meta.name, meta.zh || hn?.zh || '', h); render(); };
-    info.appendChild(favBtn);
+    info.appendChild(pkButton({ sport: 'basketball', kind: 'bb', id: meta.id, name: meta.name, zh: meta.zh || hn?.zh || '', hash: '#/player/' + meta.id }));
     hero.appendChild(info);
     view.appendChild(hero);
 
@@ -627,10 +614,7 @@
     ml.appendChild(el('span', 'chip', '球衣 #' + (meta.jersey || '—')));
     ml.appendChild(el('span', 'chip gold', '⚽ 实时数据'));
     info.appendChild(ml);
-    const h = '#/player/football/' + lgId + ':' + pid;
-    const favBtn = el('button', 'btn-main fav-btn', isMyPlayer(h) ? '✓ 已收藏' : '☆ 收藏球星');
-    favBtn.onclick = () => { toggleMyPlayer(meta.name, meta.zh || hn?.zh || '', h); render(); };
-    info.appendChild(favBtn);
+    info.appendChild(pkButton({ sport: 'football', kind: 'fb', id: pid, lg: lgId, lgZh: meta.leagueZh, name: meta.name, zh: meta.zh || hn?.zh || '', hash: '#/player/football/' + lgId + ':' + pid }));
     hero.appendChild(info);
     view.appendChild(hero);
 
@@ -688,10 +672,7 @@
     const ml = el('div', 'meta-line');
     ml.appendChild(el('span', 'chip gold', '⚽ 足球名宿'));
     info.appendChild(ml);
-    const h = location.hash;
-    const favBtn = el('button', 'btn-main fav-btn', isMyPlayer(h) ? '✓ 已收藏' : '☆ 收藏球星');
-    favBtn.onclick = () => { toggleMyPlayer(L.name, L.zh, h); render(); };
-    info.appendChild(favBtn);
+    info.appendChild(pkButton({ sport: 'basketball', kind: 'legend', hash: location.hash, name: L.name, zh: L.zh, static: L }));
     hero.appendChild(info);
     view.appendChild(hero);
 
@@ -748,10 +729,7 @@
     ml.appendChild(el('span', 'chip orange', (p.style || p.event || '')));
     ml.appendChild(el('span', 'chip gold', (sport === 'tt' ? '🏓' : '🏸') + ' ' + SPORTS[sport].label + '名将'));
     info.appendChild(ml);
-    const h = '#/player/' + sport + '/' + id;
-    const favBtn = el('button', 'btn-main fav-btn', isMyPlayer(h) ? '✓ 已收藏' : '☆ 收藏球星');
-    favBtn.onclick = () => { toggleMyPlayer(p.zh, p.name, h); render(); };
-    info.appendChild(favBtn);
+    info.appendChild(pkButton({ sport, kind: 'racket', hash: '#/player/' + sport + '/' + id, name: p.name, zh: p.zh, static: p }));
     hero.appendChild(info);
     view.appendChild(hero);
 
@@ -791,10 +769,7 @@
     ml.appendChild(el('span', 'chip orange', '位置 ' + L.pos));
     ml.appendChild(el('span', 'chip', '已退役'));
     info.appendChild(ml);
-    const h = location.hash;
-    const favBtn = el('button', 'btn-main fav-btn', isMyPlayer(h) ? '✓ 已收藏' : '☆ 收藏球星');
-    favBtn.onclick = () => { toggleMyPlayer(L.name, L.zh, h); render(); };
-    info.appendChild(favBtn);
+    info.appendChild(pkButton({ sport: 'football', kind: 'legend', hash: location.hash, name: L.name, zh: L.zh, static: L }));
     hero.appendChild(info);
     view.appendChild(hero);
 
@@ -841,7 +816,8 @@
   function headshotThumb(p, sport) {
     const wrap = el('div', 'ph');
     wrap.appendChild(el('span', '', (p.name || '?')[0].toUpperCase()));
-    const url = p.hs
+    const url = p.local
+      || p.hs
       || (portraits[p.name] ? portraits[p.name].file : null)
       || (sport === 'nba' ? `https://a.espncdn.com/i/headshots/nba/players/full/${p.id}.png` : null);
     if (!url) { wrap.classList.add('fail'); return wrap; }
@@ -872,6 +848,114 @@
     return wrap;
   }
 
+
+  /* ---------- PK 对战视图 ---------- */
+  async function renderPk() {
+    const view = $('#view');
+    $('#crumb-sep').hidden = false;
+    $('#crumb-now').textContent = '球星 PK';
+    view.innerHTML = '';
+    if (pkSlots.length < 2) {
+      view.appendChild(el('div', 'hint-box', '请先在球员页选择两位「⚔️ 选入 PK」的同运动球员'));
+      return;
+    }
+    view.appendChild(el('div', 'loading', '数据加载中'));
+
+    /* 汇总两方数据 */
+    const rows = []; // {label, a, b, lowerBetter}
+    const heads = [];
+    for (const s of pkSlots) {
+      let head = { name: s.name, zh: s.zh || '', sub: s.kind };
+      if (s.kind === 'bb') {
+        const j = await api(API_BASE.basketball, '/athletes/' + s.id + '/statistics/0');
+        const st = parseBasketball(j);
+        s.st = st;
+        head.sub = '篮球 · 生涯数据';
+      } else if (s.kind === 'fb') {
+        const j = await api(API_BASE.football, '/' + s.lg + '/athletes/' + s.id + '/statistics/0');
+        s.st = parseFootball(j);
+        head.sub = '足球 · ' + s.lgZh + '生涯';
+      }
+      heads.push(head);
+    }
+    const [A, B] = pkSlots;
+
+    function row(label, get, lowerBetter) {
+      rows.push({ label, a: get(A), b: get(B), lowerBetter });
+    }
+    if (A.kind === 'bb' && B.kind === 'bb') {
+      row('场均得分', s => s.st.avgPoints ?? 0);
+      row('场均篮板', s => s.st.avgReb ?? 0);
+      row('场均助攻', s => s.st.avgAst ?? 0);
+      row('投篮命中率', s => s.st.fgPct ?? 0);
+      row('生涯总得分', s => s.st.points);
+      row('生涯总篮板', s => s.st.rebounds);
+      row('生涯总助攻', s => s.st.assists);
+      row('生涯场次', s => s.st.gp);
+    } else if (A.kind === 'fb' && B.kind === 'fb') {
+      row('出场', s => s.st.gp);
+      row('总进球', s => s.st.goals);
+      row('黄牌', s => s.st.yellow, true);
+      row('红牌', s => s.st.red, true);
+    } else if (A.kind === 'racket' && B.kind === 'racket') {
+      row('奥运金牌', s => s.static.career.olympicGold);
+      row('世界冠军数', s => s.static.career.worldTitles);
+    } else if (A.kind === 'legend' && B.kind === 'legend') {
+      if (A.sport === 'basketball') {
+        row('场均得分', s => s.static.career.ppg);
+        row('场均篮板', s => s.static.career.rpg);
+        row('场均助攻', s => s.static.career.apg);
+        row('生涯总得分', s => s.static.career.pts);
+      } else {
+        row('生涯进球', s => s.static.career.goals);
+      }
+    }
+    if (A.sport === B.sport) {
+      const honorsCount = s => (s.static && s.static.honors ? s.static.honors.length : (s.kind === 'bb' || s.kind === 'fb' ? (s.kind === 'bb' ? (honors.find(h => norm(h.name) === norm(s.name))?.honors.length || 0) : (soccerHonors.find(h => norm(h.name) === norm(s.name))?.honors.length || 0)) : 0));
+      row('荣誉数量', honorsCount);
+    }
+
+    view.innerHTML = '';
+    const grid = el('div', 'pk-grid');
+    for (const [i, s] of [A, B].entries()) {
+      const card = el('div', 'pk-hero');
+      const pt = portraits[s.name];
+      if (pt) {
+        const ph = el('img', 'pk-photo');
+        ph.src = pt.file;
+        card.appendChild(ph);
+      }
+      card.appendChild(el('h2', '', s.zh || s.name));
+      card.appendChild(el('div', 'zh-name', heads[i].sub));
+      grid.appendChild(card);
+    }
+    view.appendChild(grid);
+
+    const table = el('div', 'pk-compare');
+    table.appendChild(el('div', 'pk-row pk-head', ''));
+    for (const r of rows) {
+      const tr = el('div', 'pk-row');
+      tr.appendChild(el('span', 'pk-label', r.label));
+      const va = el('span', 'pk-val'); va.textContent = fmtPk(r.a);
+      const vb = el('span', 'pk-val'); vb.textContent = fmtPk(r.b);
+      if (r.a !== r.b) {
+        if (r.lowerBetter ? r.a < r.b : r.a > r.b) va.classList.add('win');
+        else vb.classList.add('win');
+      }
+      tr.appendChild(va);
+      tr.appendChild(vb);
+      table.appendChild(tr);
+    }
+    view.appendChild(table);
+    const back = el('button', 'btn-main', '← 返回');
+    back.onclick = () => { location.hash = '#/'; };
+    view.appendChild(back);
+  }
+  function fmtPk(v) {
+    if (v == null) return '–';
+    if (typeof v === 'number' && !Number.isInteger(v)) return v.toFixed(1);
+    return String(v);
+  }
   /* ---------- 搜索 ---------- */
   function search(q) {
     q = norm(q.trim());

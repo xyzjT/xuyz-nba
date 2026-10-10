@@ -179,18 +179,6 @@ h1 {
   cursor: pointer;
   outline: none;
 }
-.fav-btn { margin-top: 4px; }
-.my-section {
-  background: var(--bg-secondary);
-  border: 1px solid rgba(201, 90, 36, 0.4);
-  border-radius: 16px;
-  padding: 16px;
-  margin-bottom: 8px;
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  align-items: flex-start;
-}
 .my-team-card {
   position: relative;
   min-width: 180px;
@@ -202,28 +190,70 @@ h1 {
   transition: border-color var(--dur-fast), transform var(--dur-fast);
 }
 .my-team-card:hover { border-color: var(--accent-1); transform: translateY(-2px); }
-.my-badge {
-  display: block;
-  font-size: 11px;
-  letter-spacing: 2px;
-  color: var(--accent-2);
-  margin-bottom: 6px;
-}
-.my-team-name {
-  font-family: var(--font-display);
-  font-size: 22px;
-  letter-spacing: 1px;
-}
-.my-remove {
-  font-size: 12px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 2px 6px;
-  margin-left: 8px;
-  border-radius: 6px;
-}
 .my-remove:hover { color: var(--red, #eb5757); background: rgba(235, 87, 87, 0.12); }
 .my-section .player-chip-grid { flex: 1 1 300px; }
+
+/* ---------- 球星 PK ---------- */
+#pk-bar {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-1);
+  border-radius: 14px;
+  box-shadow: 0 12px 36px var(--shadow-warm);
+}
+.pk-title { font-weight: 700; font-size: 13px; color: var(--accent-2); }
+.pk-slot {
+  padding: 6px 12px;
+  background: var(--bg-primary);
+  border: 1px solid #34302a;
+  border-radius: 999px;
+  font-size: 13px;
+}
+.pk-remove { margin-left: 6px; color: var(--text-secondary); cursor: pointer; }
+.pk-remove:hover { color: #eb5757; }
+.pk-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.pk-hero {
+  background: var(--bg-secondary);
+  border: 1px solid #34302a;
+  border-radius: 16px;
+  padding: 18px;
+  text-align: center;
+}
+.pk-hero h2 { font-family: var(--font-display); font-size: 30px; letter-spacing: 1px; }
+.pk-hero .zh-name { color: var(--text-secondary); font-size: 12px; margin-top: 4px; }
+.pk-photo {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 10px;
+  box-shadow: 0 0 0 3px rgba(201, 90, 36, 0.35);
+}
+.pk-compare { background: var(--bg-secondary); border: 1px solid #34302a; border-radius: 14px; overflow: hidden; margin-bottom: 16px; }
+.pk-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  padding: 10px 16px;
+  border-bottom: 1px dashed #2e2a24;
+  font-size: 14px;
+}
+.pk-row:last-child { border-bottom: none; }
+.pk-label { color: var(--text-secondary); }
+.pk-val { text-align: center; font-family: var(--font-mono); font-weight: 700; }
+.pk-val.win { color: var(--accent-2); text-shadow: 0 0 12px rgba(201, 160, 106, 0.5); }
 
 /* ---------- 运动切换标签 ---------- */
 #sport-tabs {
