@@ -274,6 +274,7 @@
       const grid = el('div', 'player-chip-grid');
       roster.forEach(p => {
         const chip = el('div', 'player-chip');
+        chip.appendChild(headshotThumb(p, 'nba'));
         chip.appendChild(el('span', 'jersey', '#' + (p.jersey || '–')));
         const nmWrap = el('div', '');
         nmWrap.appendChild(el('div', 'nm', p.name));
@@ -314,6 +315,7 @@
     const grid = el('div', 'player-chip-grid');
     roster.forEach(p => {
       const chip = el('div', 'player-chip');
+      chip.appendChild(headshotThumb(p, 'soccer'));
       chip.appendChild(el('span', 'jersey', '#' + (p.jersey || '–')));
       const nmWrap = el('div', '');
       nmWrap.appendChild(el('div', 'nm', p.name));
@@ -647,6 +649,21 @@
     return g;
   }
   function statRow(k, v) { const r = el('div', 'stat-row'); r.appendChild(el('span', '', k)); r.appendChild(el('b', '', String(v))); return r; }
+  /* ESPN 官方头像缩略图:优先索引内真实 URL,篮球可用固定模式兜底;无头像显示首字母 */
+  function headshotThumb(p, sport) {
+    const wrap = el('div', 'ph');
+    wrap.appendChild(el('span', '', (p.name || '?')[0].toUpperCase()));
+    const url = p.hs || (sport === 'nba' ? `https://a.espncdn.com/i/headshots/nba/players/full/${p.id}.png` : null);
+    if (!url) { wrap.classList.add('fail'); return wrap; }
+    const img = el('img');
+    img.loading = 'lazy';
+    img.alt = '';
+    img.src = url;
+    img.onload = () => wrap.classList.add('ok');
+    img.onerror = () => { wrap.classList.add('fail'); };
+    wrap.appendChild(img);
+    return wrap;
+  }
 
   /* ---------- 搜索 ---------- */
   function search(q) {

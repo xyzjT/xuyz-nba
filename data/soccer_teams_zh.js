@@ -46,4 +46,16 @@ NBA_DATA.soccerTeamsZh = {
   'SC Paderborn 07': '帕德博恩', 'SV Elversberg': '埃尔弗斯贝格', 'Stade Rennais': '雷恩', 'Troyes': '特鲁瓦',
   'AJ Auxerre': '欧塞尔', 'AS Monaco': '摩纳哥', 'Lorient': '洛里昂', 'Le Mans': '勒芒', 'Le Havre AC': '勒阿弗尔',
   'Paris FC': '巴黎FC',
+  /* 美职联 MLS */
+  'Chicago Fire FC': '芝加哥火焰', 'Columbus Crew': '哥伦布机员', 'Colorado Rapids': '科罗拉多急流',
+  'FC Dallas': '达拉斯FC', 'Sporting Kansas City': '堪萨斯城竞技', 'LA Galaxy': '洛杉矶银河',
+  'New England Revolution': '新英格兰革命', 'Red Bull New York': '纽约红牛', 'San Jose Earthquakes': '圣何塞地震',
+  'D.C. United': '华盛顿联', 'Real Salt Lake': '皇家盐湖城', 'Houston Dynamo FC': '休斯顿迪纳摩',
+  'Toronto FC': '多伦多FC', 'CF Montréal': '蒙特利尔CF', 'Portland Timbers': '波特兰伐木者',
+  'Seattle Sounders FC': '西雅图海湾人', 'Vancouver Whitecaps': '温哥华白浪', 'MLS All-Stars': 'MLS全明星',
+  'Philadelphia Union': '费城联', 'Orlando City SC': '奥兰多城', 'Minnesota United FC': '明尼苏达联',
+  'New York City FC': '纽约城', 'FC Cincinnati': '辛辛那提FC', 'Atlanta United FC': '亚特兰大联',
+  'LAFC': '洛杉矶FC', 'Nashville SC': '纳什维尔SC', 'Inter Miami CF': '迈阿密国际',
+  'Liga MX All-Stars': '墨超全明星', 'Austin FC': '奥斯汀FC', 'Charlotte FC': '夏洛特FC',
+  'St. Louis CITY SC': '圣路易斯城', 'San Diego FC': '圣迭戈FC',
 };
