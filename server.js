@@ -17,7 +17,7 @@ const MIME = {
 http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/') p = '/index.html';
-  // 个人网址映射:/xuyz-nba 与 /xuyz(别名)都指向站点根
+  // 个人网址映射:/xuyz-sports 与旧别名都指向站点根
   p = p.replace(/^\/(xuyz-sports|xuyz-nba|xuyz)(?=\/|$)/, '') || '/index.html';
   const f = path.join(ROOT, p);
   if (!f.startsWith(ROOT)) { res.writeHead(403); res.end('Forbidden'); return; }
