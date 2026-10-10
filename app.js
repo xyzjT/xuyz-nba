@@ -43,6 +43,52 @@
 
   const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
+  /* 主页 PK 对战台 */
+  function renderPkPanel(view) {
+    const panel = el('div', 'pk-panel');
+    panel.appendChild(el('div', 'pk-panel-title', '⚔️ 球星 PK 对战台'));
+    const makeBox = (label) => {
+      const box = el('div', 'pk-box');
+      const input = el('input', 'pk-box-input');
+      input.type = 'text';
+      input.placeholder = label;
+      const sugg = el('div', 'pk-suggest');
+      input.addEventListener('input', () => {
+        const rs = search(input.value).slice(0, 6);
+        sugg.innerHTML = '';
+        if (!rs.length) { sugg.classList.remove('open'); return; }
+        for (const r of rs) {
+          const it = el('div', 'sug-item');
+          it.appendChild(el('span', 'nm', r.name));
+          if (r.zh) it.appendChild(el('span', 'zh', r.zh));
+          it.appendChild(el('span', 'meta', r.meta));
+          it.onclick = () => {
+            if (r.slot) addPkSlot(r.slot);
+            input.value = r.name;
+            sugg.classList.remove('open');
+          };
+          sugg.appendChild(it);
+        }
+        sugg.classList.add('open');
+      });
+      input.addEventListener('focus', () => { if (input.value) { const e2 = new Event('input'); input.dispatchEvent(e2); } });
+      document.addEventListener('click', e => { if (!e.target.closest('.pk-box')) sugg.classList.remove('open'); });
+      box.appendChild(input);
+      box.appendChild(sugg);
+      return box;
+    };
+    panel.appendChild(makeBox('搜索球员 A(如:勒布朗)'));
+    panel.appendChild(el('span', 'pk-vs', 'VS'));
+    panel.appendChild(makeBox('搜索球员 B(如:库里)'));
+    const go = el('button', 'btn-main', '开始 PK');
+    go.onclick = () => {
+      if (pkSlots.length < 2) { updatePkBar(); return; }
+      location.hash = '#/pk';
+    };
+    panel.appendChild(go);
+    view.appendChild(panel);
+  }
+
   /* ---------- 球星 PK(内存态,同运动对战) ---------- */
   let pkSlots = [];
   function addPkSlot(slot) {
@@ -223,6 +269,7 @@
     $('#crumb-now').textContent = '';
     const view = $('#view');
     view.innerHTML = '';
+    renderPkPanel(view);
     if (sport === 'basketball') renderBasketballHome(view);
     else if (sport === 'football') renderFootballHome(view);
     else renderRacketHome(view); // 乒乓球/羽毛球
@@ -963,26 +1010,46 @@
     const out = [];
     if (sport === 'basketball') {
       for (const p of liveIndex.players) {
-        if (norm(p.name).includes(q) || (p.zh && p.zh.includes(q))) out.push({ name: p.name, zh: p.zh, meta: (p.pos || '') + ' · ' + (teamByLiveId[p.team]?.name || ''), hash: '#/player/' + p.id });
+        if (norm(p.name).includes(q) || (p.zh && p.zh.includes(q))) {
+          const hash = '#/player/' + p.id;
+          out.push({ name: p.name, zh: p.zh, meta: (p.pos || '') + ' · ' + (teamByLiveId[p.team]?.name || ''), hash,
+            slot: { sport: 'basketball', kind: 'bb', id: p.id, name: p.name, zh: p.zh || '', hash } });
+        }
         if (out.length >= 30) return out;
       }
       legends.forEach((L, i) => {
         if (out.length >= 30) return;
-        if (norm(L.name).includes(q) || norm(L.zh).includes(q)) out.push({ name: L.name, zh: L.zh, meta: '名宿 · ' + L.team, hash: '#/player/L' + i });
+        if (norm(L.name).includes(q) || norm(L.zh).includes(q)) {
+          const hash = '#/player/L' + i;
+          out.push({ name: L.name, zh: L.zh, meta: '名宿 · ' + L.team, hash,
+            slot: { sport: 'basketball', kind: 'legend', name: L.name, zh: L.zh, hash, static: L } });
+        }
       });
     } else if (sport === 'football') {
       for (const p of soccerIndex.players) {
-        if (norm(p.name).includes(q) || (p.zh && p.zh.includes(q))) out.push({ name: p.name, zh: p.zh, meta: (p.pos || '') + ' · ' + p.teamName, hash: '#/player/football/' + p.league + ':' + p.id });
+        if (norm(p.name).includes(q) || (p.zh && p.zh.includes(q))) {
+          const hash = '#/player/football/' + p.league + ':' + p.id;
+          out.push({ name: p.name, zh: p.zh, meta: (p.pos || '') + ' · ' + p.teamName, hash,
+            slot: { sport: 'football', kind: 'fb', id: p.id, lg: p.league, lgZh: p.leagueZh, name: p.name, zh: p.zh || '', hash } });
+        }
         if (out.length >= 30) return out;
       }
       soccerLegends.forEach((L, i) => {
         if (out.length >= 30) return;
-        if (norm(L.name).includes(q) || norm(L.zh).includes(q)) out.push({ name: L.zh + ' · ' + L.name, zh: '名宿 · ' + L.team, meta: L.pos, hash: '#/player/football/L' + i });
+        if (norm(L.name).includes(q) || norm(L.zh).includes(q)) {
+          const hash = '#/player/football/L' + i;
+          out.push({ name: L.zh + ' · ' + L.name, zh: '名宿 · ' + L.team, meta: L.pos, hash,
+            slot: { sport: 'football', kind: 'legend', name: L.name, zh: L.zh, hash, static: L } });
+        }
       });
     } else {
       const data = sport === 'tt' ? ttPlayers : bdPlayers;
       data.forEach((p, i) => {
-        if (norm(p.name).includes(q) || norm(p.zh).includes(q) || (p.team && norm(p.team).includes(q))) out.push({ name: p.zh + ' · ' + p.name, zh: p.team + (p.event ? ' · ' + p.event : ''), meta: p.career.peakRank, hash: '#/player/' + sport + '/' + i });
+        if (norm(p.name).includes(q) || norm(p.zh).includes(q) || (p.team && norm(p.team).includes(q))) {
+          const hash = '#/player/' + sport + '/' + i;
+          out.push({ name: p.zh + ' · ' + p.name, zh: p.team + (p.event ? ' · ' + p.event : ''), meta: p.career.peakRank, hash,
+            slot: { sport, kind: 'racket', name: p.name, zh: p.zh, hash, static: p } });
+        }
       });
     }
     return out;

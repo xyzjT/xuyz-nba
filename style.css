@@ -194,6 +194,57 @@ h1 {
 .my-section .player-chip-grid { flex: 1 1 300px; }
 
 /* ---------- 球星 PK ---------- */
+.pk-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--bg-secondary);
+  border: 1px solid rgba(201, 90, 36, 0.45);
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+}
+.pk-panel-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent-2);
+  letter-spacing: 1px;
+  margin-right: 4px;
+}
+.pk-box { position: relative; flex: 1 1 200px; }
+.pk-box-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid #34302a;
+  border-radius: 10px;
+  outline: none;
+}
+.pk-box-input:focus { border-color: var(--accent-1); }
+.pk-suggest {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: var(--bg-primary);
+  border: 1px solid #34302a;
+  border-radius: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+  display: none;
+  z-index: 50;
+  box-shadow: 0 14px 40px var(--shadow-warm);
+}
+.pk-suggest.open { display: block; }
+.pk-vs {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--accent-1);
+}
+
 #pk-bar {
   position: fixed;
   bottom: 18px;
@@ -378,6 +429,7 @@ h1 {
 }
 .team-card:hover { transform: translateY(-5px); border-color: var(--tc, #c95a24); }
 .team-card::before {
+  pointer-events: none;
   content: '';
   position: absolute;
   inset: 0;
@@ -433,6 +485,7 @@ h1 {
   animation: scaleIn 0.5s var(--ease-out);
 }
 .detail-head::before {
+  pointer-events: none;
   content: '';
   position: absolute;
   inset: 0;
@@ -524,6 +577,7 @@ h1 {
   animation: scaleIn 0.5s var(--ease-out);
 }
 .player-hero::before {
+  pointer-events: none;
   content: '';
   position: absolute;
   inset: 0;
