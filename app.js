@@ -1,33 +1,53 @@
-/* ============ NBA 数据馆 · 应用逻辑 ============ */
+/* ============ 四球数据馆 · 应用逻辑(篮球/足球/乒乓球/羽毛球) ============ */
 (() => {
-  const API = 'https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba';
-  const CUR_SEASON = 2027; // 2026-27 赛季
-  const LAST_SEASON = 2026; // 2025-26 赛季
+  const API_BASE = {
+    basketball: 'https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba',
+    football: 'https://sports.core.api.espn.com/v2/sports/soccer/leagues',
+  };
+  const CUR_SEASON = 2027;   // 篮球 2026-27
+  const FOOT_SEASON = '2026'; // 足球 ESPN 最新有数据赛季(2025-26)
 
   const $ = sel => document.querySelector(sel);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 
-  const teams = NBA_DATA.teams || [];
-  const liveIndex = (NBA_DATA.liveIndex || { teams: [], players: [] });
-  const honors = NBA_DATA.honors || [];
-  const legends = NBA_DATA.legends || [];
-  const teamById = id => teams.find(t => t.id === id);
+  const teams = NBA_DATA.teams || [];               // 篮球球队(静态)
+  const liveIndex = (NBA_DATA.liveIndex || { teams: [], players: [] }); // 篮球球员索引
+  const honors = NBA_DATA.honors || [];             // 篮球荣誉
+  const legends = NBA_DATA.legends || [];           // 篮球名宿
+  const soccerIndex = (NBA_DATA.soccerIndex || { leagues: [], players: [] }); // 足球索引
+  const soccerHonors = NBA_DATA.soccerHonors || []; // 足球荣誉
+  const soccerZh = NBA_DATA.soccerTeamsZh || {};    // 足球球队中文名(displayName -> zh)
+  const ttPlayers = NBA_DATA.tt || [];              // 乒乓球
+  const bdPlayers = NBA_DATA.bd || [];              // 羽毛球
 
-  /* ESPN 数字 ID ↔ 本地 slug 映射 */
-  const teamByLiveId = {};  // ESPN id -> 本地球队
-  const liveIdBySlug = {};  // 本地 slug -> ESPN id
+  const SPORTS = {
+    basketball: { label: '篮球', icon: '🏀' },
+    football: { label: '足球', icon: '⚽' },
+    tt: { label: '乒乓球', icon: '🏓' },
+    bd: { label: '羽毛球', icon: '🏸' },
+  };
+  let sport = 'basketball';
+
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+  /* 足球球队中文名模糊匹配(去重音/大小写),兜底英文 */
+  const soccerZhNorm = {};
+  for (const k in soccerZh) soccerZhNorm[norm(k)] = soccerZh[k];
+  const zhOf = n => soccerZh[n] || soccerZhNorm[norm(n)] || n;
+
+  /* ESPN 篮球数字 ID ↔ 本地 slug 映射 */
+  const teamByLiveId = {};
+  const liveIdBySlug = {};
   liveIndex.teams.forEach(lt => {
     const t = teams.find(x => x.en === lt.displayName);
     if (t) { teamByLiveId[lt.id] = t; liveIdBySlug[t.id] = lt.id; }
   });
   const liveTeamBySlug = slug => liveIndex.teams.find(x => x.id === liveIdBySlug[slug]) || {};
 
-  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-
-  /* ---------- API(带缓存与超时) ---------- */
+  /* ---------- API(缓存 + 超时) ---------- */
   const apiCache = new Map();
-  async function api(path, opts = {}) {
-    const url = API + path;
+  async function api(base, path, opts = {}) {
+    const url = base + path;
     const ck = url + (opts.refresh ? '|' + Date.now() : '');
     if (!opts.refresh && apiCache.has(url)) return apiCache.get(url);
     const ctrl = new AbortController();
@@ -40,26 +60,15 @@
       return j;
     } finally { clearTimeout(t); }
   }
-  const refId = r => r.$ref.split('/').slice(-1)[0].split('?')[0];
 
-  /* ---------- 统计解析 ---------- */
-  const STAT_LABELS = {
-    gamesPlayed: '场次', points: '总得分', avgPoints: '场均得分', rebounds: '篮板', avgReb: '场均篮板',
-    assists: '助攻', steals: '抢断', blocks: '盖帽', turnovers: '失误', minutes: '上场时间',
-    fgPct: '投篮%', tpPct: '三分%', ftPct: '罚球%', avgMin: '场均时间',
-  };
-
-  function parseStats(j) {
+  /* ---------- 统计解析:篮球 ---------- */
+  function parseBasketball(j) {
     const sp = j.splits || {};
     const cats = {};
     for (const c of sp.categories || []) cats[c.name] = c;
     const val = (cat, name) => { const s = (cats[cat]?.stats || []).find(x => x.name === name); return s ? s.value : null; };
     const gp = val('general', 'gamesPlayed') || 0;
     const points = val('offensive', 'points') ?? 0;
-    /* 字段分类核实(ESPN API):
-       rebounds/totalRebounds/minutes/gamesPlayed → general
-       points/assists/turnovers/offensiveRebounds/投篮数据 → offensive
-       blocks/defensiveRebounds/steals → defensive */
     const rebounds = val('general', 'rebounds') ?? val('general', 'totalRebounds') ?? 0;
     const assists = val('offensive', 'assists') ?? 0;
     const steals = val('defensive', 'steals') ?? 0;
@@ -80,31 +89,64 @@
     };
   }
 
-  /* ---------- 视图渲染 ---------- */
+  /* ---------- 统计解析:足球 ---------- */
+  function parseFootball(j) {
+    const sp = j.splits || {};
+    const cats = {};
+    for (const c of sp.categories || []) cats[c.name] = c;
+    const val = (cat, name) => { const s = (cats[cat]?.stats || []).find(x => x.name === name); return s ? s.value : null; };
+    return {
+      gp: val('general', 'appearances') ?? 0,
+      goals: val('offensive', 'totalGoals') ?? 0,
+      yellow: val('general', 'yellowCards') ?? 0,
+      red: val('general', 'redCards') ?? 0,
+    };
+  }
+
+  /* ---------- 视图路由 ---------- */
   function render() {
     const hash = location.hash || '#/';
     const parts = hash.replace(/^#\//, '').split('/');
-    const [kind, id] = parts;
+    const view = parts[0] || 'home';
+    let sid = null;
+    if (view === 'team' || view === 'player') {
+      if (parts.length >= 3 && SPORTS[parts[1]]) { sport = parts[1]; sid = parts.slice(2).join('/'); }
+      else { sport = 'basketball'; sid = parts[1]; } // 兼容旧链接
+    }
+    /* 首页:保留当前运动状态(由运动标签切换设置) */
     $('#search-suggest').classList.remove('open');
-    if (kind === 'team') renderTeam(id);
-    else if (kind === 'player') renderPlayer(id);
+    syncSportTabs();
+    if (view === 'team') renderTeam(sid);
+    else if (view === 'player') renderPlayer(sid);
     else renderHome();
     window.scrollTo(0, 0);
   }
 
-  /* 主页:分区球队卡片 */
+  function syncSportTabs() {
+    document.querySelectorAll('#sport-tabs .sport-tab').forEach(b => {
+      b.classList.toggle('active', b.dataset.sport === sport);
+    });
+    const sp = SPORTS[sport];
+    $('#search-input').placeholder = `搜索${sp.label}运动员(支持中英文)`;
+  }
+
+  /* ---------- 首页 ---------- */
   function renderHome() {
     $('#crumb-sep').hidden = true;
     $('#crumb-now').textContent = '';
     const view = $('#view');
     view.innerHTML = '';
-    const liveTeam = liveTeamBySlug;
+    if (sport === 'basketball') renderBasketballHome(view);
+    else if (sport === 'football') renderFootballHome(view);
+    else renderRacketHome(view); // 乒乓球/羽毛球
+  }
+
+  function renderBasketballHome(view) {
     for (const conf of ['东部', '西部']) {
-      const confTeams = teams.filter(t => t.conf === conf);
       view.appendChild(el('div', 'conf-title', conf + '联盟'));
       const grid = el('div', 'team-grid');
-      confTeams.forEach((t, i) => {
-        const live = liveTeam(t.id);
+      teams.filter(t => t.conf === conf).forEach((t, i) => {
+        const live = liveTeamBySlug(t.id);
         const card = el('div', 'team-card fade-in stagger-' + Math.min(3, i % 3 + 1));
         card.style.setProperty('--tc', t.colors[0]);
         card.appendChild(el('div', 'abbr', t.en.split(' ').pop().slice(0, 3).toUpperCase()));
@@ -122,20 +164,61 @@
     }
   }
 
-  /* 球队详情 */
-  async function renderTeam(id) {
-    const t = teamById(id);
+  function renderFootballHome(view) {
+    for (const lg of soccerIndex.leagues) {
+      view.appendChild(el('div', 'conf-title', lg.zh + ' · ' + lg.teams.length + ' 队'));
+      const grid = el('div', 'team-grid');
+      lg.teams.forEach((t, i) => {
+        const zh = zhOf(t.displayName);
+        const card = el('div', 'team-card fade-in stagger-' + Math.min(3, i % 3 + 1));
+        card.style.setProperty('--tc', '#c95a24');
+        card.appendChild(el('div', 'abbr', (t.abbreviation || t.name).slice(0, 3).toUpperCase()));
+        card.appendChild(el('div', 'tname', zh));
+        card.appendChild(el('div', 'tcity', t.displayName));
+        const meta = el('div', 'tmeta');
+        meta.appendChild(el('span', 'chip orange', '📍 ' + (t.arena || t.location || '')));
+        const rosterN = soccerIndex.players.filter(p => p.league === lg.id && p.team === t.id).length;
+        meta.appendChild(el('span', 'chip', '👥 ' + rosterN + ' 人'));
+        card.appendChild(meta);
+        card.onclick = () => { location.hash = '#/team/football/' + lg.id + ':' + t.id; };
+        grid.appendChild(card);
+      });
+      view.appendChild(grid);
+    }
+  }
+
+  function renderRacketHome(view) {
+    const data = sport === 'tt' ? ttPlayers : bdPlayers;
+    const title = sport === 'tt' ? '中国乒乓 & 世界名将' : '羽坛名将';
+    view.appendChild(el('div', 'conf-title', title));
+    const grid = el('div', 'player-chip-grid');
+    data.forEach((p, i) => {
+      const chip = el('div', 'player-chip fade-in stagger-' + Math.min(3, i % 3 + 1));
+      chip.appendChild(el('span', 'jersey', p.sex === '女' ? '♀' : '♂'));
+      const nmWrap = el('div', '');
+      nmWrap.appendChild(el('div', 'nm', p.zh + ' · ' + p.name));
+      nmWrap.appendChild(el('div', 'zh', p.team + (p.event ? ' · ' + p.event : '')));
+      chip.appendChild(nmWrap);
+      chip.appendChild(el('span', 'ps', p.career.peakRank));
+      chip.onclick = () => { location.hash = '#/player/' + sport + '/' + i; };
+      grid.appendChild(chip);
+    });
+    view.appendChild(grid);
+  }
+
+  /* ---------- 球队详情 ---------- */
+  function renderTeam(id) {
+    if (sport === 'football') return renderFootballTeam(id);
+    const t = teams.find(x => x.id === id);
     const view = $('#view');
     if (!t) { view.innerHTML = ''; view.appendChild(el('div', 'error-box', '未找到该球队')); return; }
     $('#crumb-sep').hidden = false;
     $('#crumb-now').textContent = t.name;
     const live = liveTeamBySlug(id);
-
     view.innerHTML = '';
     const head = el('div', 'detail-head');
     head.style.setProperty('--tc', t.colors[0]);
-    const badge = el('div', 'team-logo-badge', t.en.split(' ').pop().slice(0, 2).toUpperCase());
-    head.appendChild(badge);
+    head.appendChild(el('div', 'team-logo-badge', t.en.split(' ').pop().slice(0, 2).toUpperCase()));
     const info = el('div', '');
     info.appendChild(el('h2', '', t.name));
     info.appendChild(el('div', 'en', t.en + ' · ' + t.city));
@@ -149,11 +232,10 @@
     head.appendChild(info);
     view.appendChild(head);
 
-    /* 阵容 */
     const roster = liveIndex.players.filter(p => p.team === (live.id || ''));
     view.appendChild(el('div', 'section-title', '🧑‍🎤 现役阵容 (' + roster.length + ' 人)'));
     if (!roster.length) {
-      view.appendChild(el('div', 'hint-box', '名单索引中暂无该队球员,点击「刷新名单」从 ESPN 实时拉取'));
+      view.appendChild(el('div', 'hint-box', '名单索引中暂无该队球员'));
     } else {
       const grid = el('div', 'player-chip-grid');
       roster.forEach(p => {
@@ -169,53 +251,93 @@
       });
       view.appendChild(grid);
     }
-    const note = el('div', 'note', '名单索引生成于 ' + (liveIndex.generatedAt || '—').slice(0, 10) + ' · 数据源 ESPN');
-    view.appendChild(note);
   }
 
-  /* 球员详情 */
+  function renderFootballTeam(id) {
+    const [lgId, tId] = String(id).split(':');
+    const lg = soccerIndex.leagues.find(l => l.id === lgId);
+    const t = lg ? lg.teams.find(x => x.id === tId) : null;
+    const view = $('#view');
+    if (!t) { view.innerHTML = ''; view.appendChild(el('div', 'error-box', '未找到该球队')); return; }
+    $('#crumb-sep').hidden = false;
+    $('#crumb-now').textContent = zhOf(t.displayName);
+    view.innerHTML = '';
+    const head = el('div', 'detail-head');
+    head.style.setProperty('--tc', '#c95a24');
+    head.appendChild(el('div', 'team-logo-badge', (t.abbreviation || t.name).slice(0, 2).toUpperCase()));
+    const info = el('div', '');
+    info.appendChild(el('h2', '', zhOf(t.displayName)));
+    info.appendChild(el('div', 'en', t.displayName + ' · ' + lg.zh));
+    const facts = el('div', 'facts');
+    facts.appendChild(el('span', 'chip orange', '🏟️ ' + (t.arena || t.location || '—')));
+    facts.appendChild(el('span', 'chip', '联赛: ' + lg.zh));
+    info.appendChild(facts);
+    head.appendChild(info);
+    view.appendChild(head);
+
+    const roster = soccerIndex.players.filter(p => p.league === lgId && p.team === tId);
+    view.appendChild(el('div', 'section-title', '👥 现役阵容 (' + roster.length + ' 人)'));
+    const grid = el('div', 'player-chip-grid');
+    roster.forEach(p => {
+      const chip = el('div', 'player-chip');
+      chip.appendChild(el('span', 'jersey', '#' + (p.jersey || '–')));
+      const nmWrap = el('div', '');
+      nmWrap.appendChild(el('div', 'nm', p.name));
+      if (p.zh) nmWrap.appendChild(el('div', 'zh', p.zh));
+      chip.appendChild(nmWrap);
+      chip.appendChild(el('span', 'ps', p.pos || ''));
+      chip.onclick = () => { location.hash = '#/player/football/' + p.league + ':' + p.id; };
+      grid.appendChild(chip);
+    });
+    view.appendChild(grid);
+  }
+
+  /* ---------- 球员详情 ---------- */
   async function renderPlayer(id) {
     const view = $('#view');
     $('#crumb-sep').hidden = false;
     view.innerHTML = '';
-    view.appendChild(el('div', 'loading', '正在拉取实时数据'));
+    view.appendChild(el('div', 'loading', '正在拉取数据'));
 
-    /* 名宿(本地数据) */
-    const legIdx = id.startsWith('L') ? parseInt(id.slice(1), 10) : -1;
-    if (legIdx >= 0 && legends[legIdx]) {
-      renderLegend(legends[legIdx]);
+    if (sport === 'tt' || sport === 'bd') {
+      const data = sport === 'tt' ? ttPlayers : bdPlayers;
+      const p = data[parseInt(id, 10)];
+      if (p) renderRacketPlayer(p);
+      else { view.innerHTML = ''; view.appendChild(el('div', 'error-box', '未找到该运动员')); }
       return;
     }
+    if (sport === 'football') { await renderFootballPlayer(id); return; }
 
+    /* ---- 篮球 ---- */
+    const legIdx = id.startsWith('L') ? parseInt(id.slice(1), 10) : -1;
+    if (legIdx >= 0 && legends[legIdx]) { renderLegend(legends[legIdx]); return; }
     const meta = liveIndex.players.find(p => p.id === id);
     if (!meta) {
       view.innerHTML = '';
-      view.appendChild(el('div', 'error-box', '名单索引中未找到该球员(可能是新签约球员)。请稍后刷新名单或返回首页搜索。'));
+      view.appendChild(el('div', 'error-box', '名单索引中未找到该球员。'));
       return;
     }
     $('#crumb-now').textContent = meta.name;
 
-    /* 并行拉取:生涯 + 当赛季 + 上赛季 */
     const [careerJ, curJ, lastJ] = await Promise.allSettled([
-      api('/athletes/' + id + '/statistics/0'),
-      api('/seasons/' + CUR_SEASON + '/types/2/athletes/' + id + '/statistics'),
-      api('/seasons/' + LAST_SEASON + '/types/2/athletes/' + id + '/statistics'),
+      api(API_BASE.basketball, '/athletes/' + id + '/statistics/0'),
+      api(API_BASE.basketball, '/seasons/' + CUR_SEASON + '/types/2/athletes/' + id + '/statistics'),
+      api(API_BASE.basketball, '/seasons/' + (CUR_SEASON - 1) + '/types/2/athletes/' + id + '/statistics'),
     ]);
-    const career = careerJ.status === 'fulfilled' ? parseStats(careerJ.value) : null;
-    const cur = curJ.status === 'fulfilled' && curJ.value && !curJ.value.error ? parseStats(curJ.value) : null;
-    const last = lastJ.status === 'fulfilled' && lastJ.value && !lastJ.value.error ? parseStats(lastJ.value) : null;
+    const career = careerJ.status === 'fulfilled' ? parseBasketball(careerJ.value) : null;
+    const cur = curJ.status === 'fulfilled' && curJ.value && !curJ.value.error ? parseBasketball(curJ.value) : null;
+    const last = lastJ.status === 'fulfilled' && lastJ.value && !lastJ.value.error ? parseBasketball(lastJ.value) : null;
 
     const hn = honors.find(h => norm(h.name) === norm(meta.name)) || honors.find(h => norm(h.name).includes(norm(meta.name.split(' ')[1] || '')));
 
     view.innerHTML = '';
     const hero = el('div', 'player-hero');
     const team = teamByLiveId[meta.team];
-    hero.style.setProperty('--tc', team ? team.colors[0] : '#e85d1f');
+    hero.style.setProperty('--tc', team ? team.colors[0] : '#c95a24');
     hero.appendChild(el('div', 'avatar', (meta.name[0] || '?').toUpperCase()));
     const info = el('div', '');
     info.appendChild(el('h2', '', meta.name));
-    const zhLine = el('div', 'zh-name', (meta.zh || hn?.zh || '') + (team ? ' · ' + team.name : ''));
-    info.appendChild(zhLine);
+    info.appendChild(el('div', 'zh-name', (meta.zh || hn?.zh || '') + (team ? ' · ' + team.name : '')));
     const ml = el('div', 'meta-line');
     ml.appendChild(el('span', 'chip orange', '位置 ' + (meta.pos || '—')));
     ml.appendChild(el('span', 'chip', '球衣 #' + (meta.jersey || '—')));
@@ -224,37 +346,32 @@
     hero.appendChild(info);
     view.appendChild(hero);
 
-    /* 荣誉 */
     if (hn && hn.honors.length) {
       const strip = el('div', 'honor-strip');
       hn.honors.forEach(h => strip.appendChild(el('span', 'honor-badge', h)));
       view.appendChild(strip);
     }
 
-    /* 统计卡片 */
     const cards = el('div', 'stats-cards');
-
-    /* 当赛季 */
     const curCard = el('div', 'stats-card');
     curCard.appendChild(el('h3', '', '📡 当赛季 (2026-27)'));
     if (cur && cur.gp > 0) {
-      curCard.appendChild(statGrid(cur, true));
+      curCard.appendChild(basketballGrid(cur, true));
       curCard.appendChild(el('div', 'note', '数据实时来自 ESPN · 常规赛进行中'));
     } else if (!cur) {
-      curCard.appendChild(el('div', 'hint-box', '2026-27 常规赛尚未开赛(季前赛阶段),暂无当赛季数据。以下展示 2025-26 赛季数据:'));
-      if (last && last.gp > 0) curCard.appendChild(statGrid(last, true));
+      curCard.appendChild(el('div', 'hint-box', '2026-27 常规赛尚未开赛,以下为 2025-26 赛季数据:'));
+      if (last && last.gp > 0) curCard.appendChild(basketballGrid(last, true));
       else curCard.appendChild(el('div', 'error-box', '上赛季数据暂不可用'));
     } else {
       curCard.appendChild(el('div', 'hint-box', '该球员本赛季暂无常规赛出场记录'));
-      if (last && last.gp > 0) { curCard.appendChild(el('div', 'note', '最近一季 (2025-26):')); curCard.appendChild(statGrid(last, true)); }
+      if (last && last.gp > 0) { curCard.appendChild(el('div', 'note', '最近一季 (2025-26):')); curCard.appendChild(basketballGrid(last, true)); }
     }
     cards.appendChild(curCard);
 
-    /* 生涯 */
     const carCard = el('div', 'stats-card');
     carCard.appendChild(el('h3', '', '📜 生涯数据'));
     if (career && career.gp > 0) {
-      carCard.appendChild(statGrid(career, false));
+      carCard.appendChild(basketballGrid(career, false));
       const rows = el('div', 'stat-rows');
       rows.appendChild(statRow('生涯总得分', career.points.toLocaleString()));
       rows.appendChild(statRow('生涯总篮板', career.rebounds.toLocaleString()));
@@ -266,32 +383,101 @@
       carCard.appendChild(el('div', 'error-box', '生涯数据暂不可用'));
     }
     cards.appendChild(carCard);
-
     view.appendChild(cards);
   }
 
-  function statGrid(s, perGame) {
+  async function renderFootballPlayer(id) {
+    const view = $('#view');
+    const [lgId, pid] = String(id).split(':');
+    const meta = soccerIndex.players.find(p => p.league === lgId && p.id === pid);
+    if (!meta) {
+      view.innerHTML = '';
+      view.appendChild(el('div', 'error-box', '未找到该球员。'));
+      return;
+    }
+    $('#crumb-now').textContent = meta.name;
+
+    const statsJ = await Promise.allSettled([
+      api(API_BASE.football, '/' + lgId + '/athletes/' + pid + '/statistics/0'),
+    ]);
+    const stats = statsJ[0].status === 'fulfilled' ? parseFootball(statsJ[0].value) : null;
+    const hn = soccerHonors.find(h => norm(h.name) === norm(meta.name)) || soccerHonors.find(h => norm(h.name).includes(norm(meta.name.split(' ')[1] || '')));
+
+    view.innerHTML = '';
+    const hero = el('div', 'player-hero');
+    hero.style.setProperty('--tc', '#c95a24');
+    hero.appendChild(el('div', 'avatar', (meta.name[0] || '?').toUpperCase()));
+    const info = el('div', '');
+    info.appendChild(el('h2', '', meta.name));
+    info.appendChild(el('div', 'zh-name', (meta.zh || hn?.zh || '') + ' · ' + meta.teamName + ' · ' + meta.leagueZh));
+    const ml = el('div', 'meta-line');
+    ml.appendChild(el('span', 'chip orange', '位置 ' + (meta.pos || '—')));
+    ml.appendChild(el('span', 'chip', '球衣 #' + (meta.jersey || '—')));
+    ml.appendChild(el('span', 'chip gold', '⚽ 实时数据'));
+    info.appendChild(ml);
+    hero.appendChild(info);
+    view.appendChild(hero);
+
+    if (hn && hn.honors.length) {
+      const strip = el('div', 'honor-strip');
+      hn.honors.forEach(h => strip.appendChild(el('span', 'honor-badge', h)));
+      view.appendChild(strip);
+    }
+
+    const cards = el('div', 'stats-cards');
+    const carCard = el('div', 'stats-card');
+    carCard.appendChild(el('h3', '', '📜 生涯数据(ESPN 实时)'));
+    if (stats && stats.gp > 0) {
+      const g = el('div', 'stat-grid');
+      const cell = (v, k) => { const c = el('div', 'stat-cell'); c.appendChild(el('div', 'v', v)); c.appendChild(el('div', 'k', k)); g.appendChild(c); };
+      cell(stats.gp, '出场'); cell(stats.goals, '总进球'); cell(stats.yellow, '黄牌'); cell(stats.red, '红牌');
+      carCard.appendChild(g);
+      carCard.appendChild(el('div', 'note', '数据源 ESPN(2025-26 及生涯累计)· 足球接口不含助攻字段'));
+    } else {
+      carCard.appendChild(el('div', 'error-box', '生涯数据暂不可用'));
+    }
+    cards.appendChild(carCard);
+    view.appendChild(cards);
+  }
+
+  function renderRacketPlayer(p) {
+    const view = $('#view');
+    $('#crumb-now').textContent = p.zh;
+    view.innerHTML = '';
+    const hero = el('div', 'player-hero');
+    hero.style.setProperty('--tc', '#c95a24');
+    hero.appendChild(el('div', 'avatar', p.zh[0]));
+    const info = el('div', '');
+    info.appendChild(el('h2', '', p.zh + ' · ' + p.name));
+    info.appendChild(el('div', 'zh-name', p.team + ' · ' + (p.event || (p.sex === '女' ? '女子' : '男子'))));
+    const ml = el('div', 'meta-line');
+    ml.appendChild(el('span', 'chip orange', (p.style || p.event || '')));
+    ml.appendChild(el('span', 'chip gold', (sport === 'tt' ? '🏓' : '🏸') + ' ' + SPORTS[sport].label + '名将'));
+    info.appendChild(ml);
+    hero.appendChild(info);
+    view.appendChild(hero);
+
+    const strip = el('div', 'honor-strip');
+    p.honors.forEach(h => strip.appendChild(el('span', 'honor-badge', h)));
+    view.appendChild(strip);
+
+    const cards = el('div', 'stats-cards');
+    const carCard = el('div', 'stats-card');
+    carCard.appendChild(el('h3', '', '📜 生涯战绩(人工整理)'));
     const g = el('div', 'stat-grid');
     const cell = (v, k) => { const c = el('div', 'stat-cell'); c.appendChild(el('div', 'v', v)); c.appendChild(el('div', 'k', k)); g.appendChild(c); };
-    const r1 = x => x == null ? '–' : (Number.isInteger(x) ? x : x.toFixed(1));
-    cell(perGame ? r1(s.avgPoints) : r1(s.points), perGame ? '场均得分' : '总得分');
-    cell(perGame ? r1(s.avgReb) : r1(s.rebounds), perGame ? '场均篮板' : '总篮板');
-    cell(perGame ? r1(s.avgAst) : r1(s.assists), perGame ? '场均助攻' : '总助攻');
-    cell(s.gp, '场次');
-    cell(r1(s.steals), '抢断');
-    cell(r1(s.blocks), '盖帽');
-    cell(r1(s.turnovers), '失误');
-    cell(perGame ? r1(s.avgMin) : r1(s.minutes), '分钟');
-    cell(s.fgPct == null ? '–' : s.fgPct.toFixed(1) + '%', '投篮%');
-    cell(s.tpPct == null ? '–' : s.tpPct.toFixed(1) + '%', '三分%');
-    cell(s.ftPct == null ? '–' : s.ftPct.toFixed(1) + '%', '罚球%');
-    cell(perGame ? '' : r1(s.points), perGame ? '' : '生涯总得分');
-    if (!perGame) g.removeChild(g.lastChild);
-    return g;
+    cell(p.career.olympicGold, '奥运金牌'); cell(p.career.worldTitles, '世界冠军数'); cell(p.career.peakRank, '最高排名'); cell(p.sex === '女' ? '女子' : '男子', '组别');
+    carCard.appendChild(g);
+    const rows = el('div', 'stat-rows');
+    rows.appendChild(statRow('所属协会', p.team));
+    rows.appendChild(statRow('技术特点', p.style || p.event || '—'));
+    rows.appendChild(statRow('生涯点评', p.note));
+    carCard.appendChild(rows);
+    carCard.appendChild(el('div', 'note', '乒乓球/羽毛球无公开实时数据接口,荣誉与战绩为人工整理'));
+    cards.appendChild(carCard);
+    view.appendChild(cards);
   }
-  function statRow(k, v) { const r = el('div', 'stat-row'); r.appendChild(el('span', '', k)); r.appendChild(el('b', '', String(v))); return r; }
 
-  /* 名宿渲染(本地) */
   function renderLegend(L) {
     const view = $('#view');
     $('#crumb-now').textContent = L.name;
@@ -326,19 +512,53 @@
     view.appendChild(cards);
   }
 
+  /* ---------- 组件 ---------- */
+  function basketballGrid(s, perGame) {
+    const g = el('div', 'stat-grid');
+    const cell = (v, k) => { const c = el('div', 'stat-cell'); c.appendChild(el('div', 'v', v)); c.appendChild(el('div', 'k', k)); g.appendChild(c); };
+    const r1 = x => x == null ? '–' : (Number.isInteger(x) ? x : x.toFixed(1));
+    cell(perGame ? r1(s.avgPoints) : r1(s.points), perGame ? '场均得分' : '总得分');
+    cell(perGame ? r1(s.avgReb) : r1(s.rebounds), perGame ? '场均篮板' : '总篮板');
+    cell(perGame ? r1(s.avgAst) : r1(s.assists), perGame ? '场均助攻' : '总助攻');
+    cell(s.gp, '场次');
+    cell(r1(s.steals), '抢断');
+    cell(r1(s.blocks), '盖帽');
+    cell(r1(s.turnovers), '失误');
+    cell(perGame ? r1(s.avgMin) : r1(s.minutes), '分钟');
+    cell(s.fgPct == null ? '–' : s.fgPct.toFixed(1) + '%', '投篮%');
+    cell(s.tpPct == null ? '–' : s.tpPct.toFixed(1) + '%', '三分%');
+    cell(s.ftPct == null ? '–' : s.ftPct.toFixed(1) + '%', '罚球%');
+    cell(perGame ? '' : r1(s.points), perGame ? '' : '生涯总得分');
+    if (!perGame) g.removeChild(g.lastChild);
+    return g;
+  }
+  function statRow(k, v) { const r = el('div', 'stat-row'); r.appendChild(el('span', '', k)); r.appendChild(el('b', '', String(v))); return r; }
+
   /* ---------- 搜索 ---------- */
   function search(q) {
     q = norm(q.trim());
     if (!q) return [];
     const out = [];
-    for (const p of liveIndex.players) {
-      if (norm(p.name).includes(q) || (p.zh && p.zh.includes(q))) out.push({ type: 'live', name: p.name, zh: p.zh, id: p.id, meta: (p.pos || '') + ' · ' + (teamByLiveId[p.team]?.name || '') });
-      if (out.length >= 30) return out;
+    if (sport === 'basketball') {
+      for (const p of liveIndex.players) {
+        if (norm(p.name).includes(q) || (p.zh && p.zh.includes(q))) out.push({ name: p.name, zh: p.zh, meta: (p.pos || '') + ' · ' + (teamByLiveId[p.team]?.name || ''), hash: '#/player/' + p.id });
+        if (out.length >= 30) return out;
+      }
+      legends.forEach((L, i) => {
+        if (out.length >= 30) return;
+        if (norm(L.name).includes(q) || L.zh.includes(q)) out.push({ name: L.name, zh: L.zh, meta: '名宿 · ' + L.team, hash: '#/player/L' + i });
+      });
+    } else if (sport === 'football') {
+      for (const p of soccerIndex.players) {
+        if (norm(p.name).includes(q) || (p.zh && p.zh.includes(q))) out.push({ name: p.name, zh: p.zh, meta: (p.pos || '') + ' · ' + p.teamName, hash: '#/player/football/' + p.league + ':' + p.id });
+        if (out.length >= 30) return out;
+      }
+    } else {
+      const data = sport === 'tt' ? ttPlayers : bdPlayers;
+      data.forEach((p, i) => {
+        if (norm(p.name).includes(q) || norm(p.zh).includes(q) || (p.team && norm(p.team).includes(q))) out.push({ name: p.zh + ' · ' + p.name, zh: p.team + (p.event ? ' · ' + p.event : ''), meta: p.career.peakRank, hash: '#/player/' + sport + '/' + i });
+      });
     }
-    legends.forEach((L, i) => {
-      if (out.length >= 30) return;
-      if (norm(L.name).includes(q) || L.zh.includes(q)) out.push({ type: 'legend', name: L.name, zh: L.zh, id: 'L' + i, meta: '名宿 · ' + L.team });
-    });
     return out;
   }
 
@@ -353,7 +573,7 @@
       it.appendChild(el('span', 'nm', r.name));
       if (r.zh) it.appendChild(el('span', 'zh', r.zh));
       it.appendChild(el('span', 'meta', r.meta));
-      it.onclick = () => { location.hash = '#/player/' + r.id; input.value = ''; };
+      it.onclick = () => { location.hash = r.hash; input.value = ''; };
       sugg.appendChild(it);
     });
     sugg.classList.add('open');
@@ -361,10 +581,19 @@
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       const rs = search(input.value);
-      if (rs.length) { location.hash = '#/player/' + rs[0].id; input.value = ''; }
+      if (rs.length) { location.hash = rs[0].hash; input.value = ''; }
     } else if (e.key === 'Escape') { sugg.classList.remove('open'); }
   });
   document.addEventListener('click', e => { if (!e.target.closest('#search-wrap')) sugg.classList.remove('open'); });
+
+  /* 运动切换 */
+  document.querySelectorAll('.sport-tab').forEach(b => {
+    b.addEventListener('click', () => {
+      sport = b.dataset.sport;
+      location.hash = '#/';
+      if (location.hash === '#/' || location.hash === '') render();
+    });
+  });
 
   window.addEventListener('hashchange', render);
   render();

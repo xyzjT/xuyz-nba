@@ -10,9 +10,15 @@
 
 <header id="hero" class="fade-in stagger-1">
   <div class="hero-left">
-    <div class="hero-kicker">🏀 THE ASSOCIATION</div>
-    <h1>NBA 数据馆</h1>
-    <p class="hero-sub">三十支球队 · 实时球员数据 · 荣誉与生涯档案</p>
+    <div class="hero-kicker">🏆 FOUR SPORTS · ONE ALMANAC</div>
+    <h1>四球数据馆</h1>
+    <p class="hero-sub">篮球 · 足球 · 乒乓球 · 羽毛球 —— 运动员数据一站式查询</p>
+    <nav id="sport-tabs">
+      <button class="sport-tab active" data-sport="basketball">🏀 篮球</button>
+      <button class="sport-tab" data-sport="football">⚽ 足球</button>
+      <button class="sport-tab" data-sport="tt">🏓 乒乓球</button>
+      <button class="sport-tab" data-sport="bd">🏸 羽毛球</button>
+    </nav>
   </div>
   <div class="hero-right">
     <div id="search-wrap">
@@ -30,13 +36,18 @@
 <main id="view"></main>
 
 <footer id="foot">
-  <span>数据实时来自 ESPN Stats API(2026-27 赛季)</span>
-  <span>· 荣誉库人工整理 · 常规赛开赛后当赛季数据自动更新</span>
+  <span>篮球/足球数据实时来自 ESPN Stats API</span>
+  <span>· 乒乓球/羽毛球荣誉库人工整理 · 常规赛开赛后当赛季数据自动更新</span>
 </footer>
 
 <script src="data/teams.js"></script>
 <script src="data/live_index.js"></script>
 <script src="data/honors.js"></script>
+<script src="data/soccer_teams_zh.js"></script>
+<script src="data/soccer_index.js"></script>
+<script src="data/soccer_honors.js"></script>
+<script src="data/tt_players.js"></script>
+<script src="data/bd_players.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
