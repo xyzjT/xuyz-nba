@@ -59,6 +59,39 @@ body::before {
   mix-blend-mode: overlay;
 }
 
+/* ---------- 球员画像背景层 ---------- */
+#player-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+#player-backdrop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, var(--bg-primary) 12%, rgba(20, 18, 16, 0.88) 38%, rgba(20, 18, 16, 0.45) 68%, rgba(20, 18, 16, 0.15) 100%),
+    linear-gradient(to top, var(--bg-primary) 8%, transparent 40%);
+}
+#player-backdrop img {
+  position: absolute;
+  top: 50%;
+  right: -4vw;
+  transform: translateY(-50%);
+  max-height: 96vh;
+  max-width: 58vw;
+  object-fit: contain;
+  opacity: 0;
+  filter: grayscale(55%) contrast(1.05);
+  transition: opacity 1.2s ease;
+}
+#player-backdrop.loaded img { opacity: 0.24; }
+@media (prefers-reduced-motion: reduce) {
+  #player-backdrop img { transition: none; }
+}
+
 /* ---------- 动效 ---------- */
 .fade-in { opacity: 0; animation: fadeInUp 0.8s var(--ease-out) forwards; }
 .stagger-1 { animation-delay: 0.05s; }

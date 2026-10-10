@@ -115,6 +115,27 @@
     };
   }
 
+  /* ---------- 球员画像背景 ---------- */
+  let backdropEl = null;
+  function setPlayerBackdrop(url) {
+    if (!url) {
+      if (backdropEl) { backdropEl.remove(); backdropEl = null; }
+      return;
+    }
+    if (!backdropEl) {
+      backdropEl = el('div');
+      backdropEl.id = 'player-backdrop';
+      document.body.appendChild(backdropEl);
+    }
+    const img = el('img');
+    img.src = url;
+    img.alt = '';
+    img.onload = () => backdropEl.classList.add('loaded');
+    img.onerror = () => { if (backdropEl) { backdropEl.remove(); backdropEl = null; } };
+    backdropEl.innerHTML = '';
+    backdropEl.appendChild(img);
+  }
+
   /* ---------- 视图路由 ---------- */
   function render() {
     const hash = location.hash || '#/';
@@ -127,6 +148,7 @@
     }
     /* 首页:保留当前运动状态(由运动标签切换设置) */
     $('#search-suggest').classList.remove('open');
+    setPlayerBackdrop(null);
     syncSportTabs();
     if (view === 'team') renderTeam(sid);
     else if (view === 'player') renderPlayer(sid);
@@ -331,11 +353,13 @@
     }
     $('#crumb-now').textContent = meta.name;
 
-    const [careerJ, curJ, lastJ] = await Promise.allSettled([
+    const [careerJ, curJ, lastJ, detailJ] = await Promise.allSettled([
       api(API_BASE.basketball, '/athletes/' + id + '/statistics/0'),
       api(API_BASE.basketball, '/seasons/' + CUR_SEASON + '/types/2/athletes/' + id + '/statistics'),
       api(API_BASE.basketball, '/seasons/' + (CUR_SEASON - 1) + '/types/2/athletes/' + id + '/statistics'),
+      api(API_BASE.basketball, '/athletes/' + id),
     ]);
+    if (detailJ.status === 'fulfilled' && detailJ.value?.headshot?.href) setPlayerBackdrop(detailJ.value.headshot.href);
     const career = careerJ.status === 'fulfilled' ? parseBasketball(careerJ.value) : null;
     const cur = curJ.status === 'fulfilled' && curJ.value && !curJ.value.error ? parseBasketball(curJ.value) : null;
     const last = lastJ.status === 'fulfilled' && lastJ.value && !lastJ.value.error ? parseBasketball(lastJ.value) : null;
@@ -417,8 +441,10 @@
 
     const statsJ = await Promise.allSettled([
       api(API_BASE.football, '/' + lgId + '/athletes/' + pid + '/statistics/0'),
+      api(API_BASE.football, '/' + lgId + '/athletes/' + pid),
     ]);
     const stats = statsJ[0].status === 'fulfilled' ? parseFootball(statsJ[0].value) : null;
+    if (statsJ[1].status === 'fulfilled' && statsJ[1].value?.headshot?.href) setPlayerBackdrop(statsJ[1].value.headshot.href);
     const hn = soccerHonors.find(h => norm(h.name) === norm(meta.name)) || soccerHonors.find(h => norm(h.name).includes(norm(meta.name.split(' ')[1] || '')));
 
     view.innerHTML = '';
