@@ -146,6 +146,85 @@ h1 {
 }
 .hero-right { flex: 1 1 320px; max-width: 560px; }
 
+/* ---------- 首页控制条与收藏 ---------- */
+.home-controls {
+  display: flex;
+  gap: 10px;
+  margin: 4px 0 14px;
+  flex-wrap: wrap;
+}
+.team-search {
+  flex: 1 1 240px;
+  max-width: 380px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid #34302a;
+  border-radius: 10px;
+  outline: none;
+  transition: border-color var(--dur-fast);
+}
+.team-search:focus { border-color: var(--accent-1); }
+.team-search::placeholder { color: var(--text-secondary); }
+.team-sort {
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid #34302a;
+  border-radius: 10px;
+  cursor: pointer;
+  outline: none;
+}
+.fav-btn { margin-top: 4px; }
+.my-section {
+  background: var(--bg-secondary);
+  border: 1px solid rgba(201, 90, 36, 0.4);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.my-team-card {
+  position: relative;
+  min-width: 180px;
+  padding: 14px 18px;
+  background: var(--bg-primary);
+  border: 1px solid #34302a;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color var(--dur-fast), transform var(--dur-fast);
+}
+.my-team-card:hover { border-color: var(--accent-1); transform: translateY(-2px); }
+.my-badge {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--accent-2);
+  margin-bottom: 6px;
+}
+.my-team-name {
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 1px;
+}
+.my-remove {
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 6px;
+  margin-left: 8px;
+  border-radius: 6px;
+}
+.my-remove:hover { color: var(--red, #eb5757); background: rgba(235, 87, 87, 0.12); }
+.my-section .player-chip-grid { flex: 1 1 300px; }
+
 /* ---------- 运动切换标签 ---------- */
 #sport-tabs {
   display: flex;

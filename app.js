@@ -43,6 +43,23 @@
 
   const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
+  /* ---------- 个人收藏(主队 + 球星,localStorage 持久化) ---------- */
+  let my = (() => { try { return JSON.parse(localStorage.getItem('qiutan_my') || '{}'); } catch { return {}; } })();
+  if (!my.players) my.players = [];
+  function saveMy() { try { localStorage.setItem('qiutan_my', JSON.stringify(my)); } catch {} }
+  function isMyTeam(sport, id) { return my.team && my.team.sport === sport && my.team.id === id; }
+  function toggleMyTeam(sport, id, name, zh) {
+    if (isMyTeam(sport, id)) my.team = null;
+    else my.team = { sport, id, name, zh };
+    saveMy();
+  }
+  function isMyPlayer(hash) { return my.players.some(p => p.hash === hash); }
+  function toggleMyPlayer(name, zh, hash) {
+    if (isMyPlayer(hash)) my.players = my.players.filter(p => p.hash !== hash);
+    else { my.players.unshift({ name, zh, hash }); if (my.players.length > 20) my.players.pop(); }
+    saveMy();
+  }
+
   /* 足球球队中文名模糊匹配(去重音/大小写),兜底英文 */
   const soccerZhNorm = {};
   for (const k in soccerZh) soccerZhNorm[norm(k)] = soccerZh[k];
@@ -172,74 +189,207 @@
     $('#crumb-now').textContent = '';
     const view = $('#view');
     view.innerHTML = '';
+    renderMySection(view);
     if (sport === 'basketball') renderBasketballHome(view);
     else if (sport === 'football') renderFootballHome(view);
     else renderRacketHome(view); // 乒乓球/羽毛球
   }
 
-  function renderBasketballHome(view) {
-    for (const conf of ['东部', '西部']) {
-      view.appendChild(el('div', 'conf-title', conf + '联盟'));
-      const grid = el('div', 'team-grid');
-      teams.filter(t => t.conf === conf).forEach((t, i) => {
-        const live = liveTeamBySlug(t.id);
-        const card = el('div', 'team-card fade-in stagger-' + Math.min(3, i % 3 + 1));
-        card.style.setProperty('--tc', t.colors[0]);
-        card.appendChild(el('div', 'abbr', t.en.split(' ').pop().slice(0, 3).toUpperCase()));
-        card.appendChild(el('div', 'tname', t.name));
-        card.appendChild(el('div', 'tcity', t.en));
-        const meta = el('div', 'tmeta');
-        meta.appendChild(el('span', 'chip gold', '🏆 ' + (t.champs || 0) + ' 冠'));
-        meta.appendChild(el('span', 'chip orange', '📍 ' + (live.arena || t.arena)));
-        meta.appendChild(el('span', 'chip', t.div));
-        card.appendChild(meta);
-        card.onclick = () => { location.hash = '#/team/' + t.id; };
-        grid.appendChild(card);
-      });
-      view.appendChild(grid);
+  /* 「我的」区块:主队 + 收藏球星 */
+  function renderMySection(view) {
+    if (!my.team && !my.players.length) return;
+    view.appendChild(el('div', 'conf-title', '⭐ 我的关注'));
+    const wrap = el('div', 'my-section');
+    if (my.team) {
+      const card = el('div', 'my-team-card');
+      card.appendChild(el('span', 'my-badge', SPORTS[my.team.sport]?.icon + ' 主队'));
+      card.appendChild(el('div', 'my-team-name', my.team.zh || my.team.name));
+      card.appendChild(el('span', 'my-remove', '取消'));
+      card.onclick = e => {
+        if (e.target.classList.contains('my-remove')) { my.team = null; saveMy(); render(); return; }
+        location.hash = '#/team/' + (my.team.sport === 'football' ? 'football/' : '') + my.team.id;
+      };
+      wrap.appendChild(card);
     }
+    const chips = el('div', 'player-chip-grid');
+    for (const p of my.players) {
+      const chip = el('div', 'player-chip');
+      const nmWrap = el('div', '');
+      nmWrap.appendChild(el('div', 'nm', p.name));
+      if (p.zh) nmWrap.appendChild(el('div', 'zh', p.zh));
+      chip.appendChild(nmWrap);
+      const rm = el('span', 'my-remove', '✕');
+      chip.appendChild(rm);
+      chip.onclick = e => {
+        if (e.target.classList.contains('my-remove')) { my.players = my.players.filter(x => x.hash !== p.hash); saveMy(); render(); return; }
+        location.hash = p.hash;
+      };
+      chips.appendChild(chip);
+    }
+    wrap.appendChild(chips);
+    view.appendChild(wrap);
+  }
+
+  function renderBasketballHome(view) {
+    /* 控制条:搜索 + 排序 */
+    const controls = el('div', 'home-controls');
+    const search = el('input', 'team-search');
+    search.type = 'text';
+    search.placeholder = '🔍 搜索球队(如:湖人 / Lakers)';
+    const sortSel = el('select', 'team-sort');
+    const sortOpts = [['default', '默认排序'], ['champs', '冠军数 ↓'], ['founded', '成立年份 ↑'], ['conf', '按赛区']];
+    for (const [v, label] of sortOpts) {
+      const o = el('option', '', label);
+      o.value = v;
+      sortSel.appendChild(o);
+    }
+    controls.appendChild(search);
+    controls.appendChild(sortSel);
+    view.appendChild(controls);
+
+    const area = el('div');
+    view.appendChild(area);
+
+    function drawGrid() {
+      area.innerHTML = '';
+      const q = norm(search.value);
+      let list = teams.filter(t => !q || norm(t.name).includes(q) || norm(t.en).includes(q) || norm(t.city || '').includes(q));
+      const sortBy = sortSel.value;
+      if (sortBy === 'champs') list = [...list].sort((a, b) => (b.champs || 0) - (a.champs || 0));
+      else if (sortBy === 'founded') list = [...list].sort((a, b) => a.founded - b.founded);
+      else if (sortBy === 'conf') list = [...list].sort((a, b) => (a.conf + a.div).localeCompare(b.conf + b.div));
+      if (sortBy === 'conf' || sortBy === 'default') {
+        for (const conf of ['东部', '西部']) {
+          const sub = list.filter(t => t.conf === conf);
+          if (!sub.length) continue;
+          area.appendChild(el('div', 'conf-title', conf + '联盟'));
+          area.appendChild(buildTeamGrid(sub, t => '#/team/' + t.id));
+        }
+      } else {
+        area.appendChild(buildTeamGrid(list, t => '#/team/' + t.id));
+      }
+    }
+    search.addEventListener('input', drawGrid);
+    sortSel.addEventListener('change', drawGrid);
+    drawGrid();
+  }
+
+  function buildTeamGrid(list, hashOf) {
+    const grid = el('div', 'team-grid');
+    list.forEach((t, i) => {
+      const live = liveTeamBySlug(t.id);
+      const card = el('div', 'team-card fade-in stagger-' + Math.min(3, i % 3 + 1));
+      card.style.setProperty('--tc', t.colors[0]);
+      card.appendChild(el('div', 'abbr', t.en.split(' ').pop().slice(0, 3).toUpperCase()));
+      card.appendChild(el('div', 'tname', t.name));
+      card.appendChild(el('div', 'tcity', t.en));
+      const meta = el('div', 'tmeta');
+      meta.appendChild(el('span', 'chip gold', '🏆 ' + (t.champs || 0) + ' 冠'));
+      meta.appendChild(el('span', 'chip orange', '📍 ' + (live.arena || t.arena)));
+      meta.appendChild(el('span', 'chip', t.div));
+      if (isMyTeam('basketball', t.id)) meta.appendChild(el('span', 'chip gold', '⭐ 主队'));
+      card.appendChild(meta);
+      card.onclick = () => { location.hash = hashOf(t); };
+      grid.appendChild(card);
+    });
+    return grid;
   }
 
   function renderFootballHome(view) {
-    for (const lg of soccerIndex.leagues) {
-      view.appendChild(el('div', 'conf-title', lg.zh + ' · ' + lg.teams.length + ' 队'));
-      const grid = el('div', 'team-grid');
-      lg.teams.forEach((t, i) => {
-        const zh = zhOf(t.displayName);
-        const card = el('div', 'team-card fade-in stagger-' + Math.min(3, i % 3 + 1));
-        card.style.setProperty('--tc', '#c95a24');
-        card.appendChild(el('div', 'abbr', (t.abbreviation || t.name).slice(0, 3).toUpperCase()));
-        card.appendChild(el('div', 'tname', zh));
-        card.appendChild(el('div', 'tcity', t.displayName));
-        const meta = el('div', 'tmeta');
-        meta.appendChild(el('span', 'chip orange', '📍 ' + (t.arena || t.location || '')));
-        const rosterN = soccerIndex.players.filter(p => p.league === lg.id && p.team === t.id).length;
-        meta.appendChild(el('span', 'chip', '👥 ' + rosterN + ' 人'));
-        card.appendChild(meta);
-        card.onclick = () => { location.hash = '#/team/football/' + lg.id + ':' + t.id; };
-        grid.appendChild(card);
-      });
-      view.appendChild(grid);
+    /* 控制条:搜索 + 排序 */
+    const controls = el('div', 'home-controls');
+    const search = el('input', 'team-search');
+    search.type = 'text';
+    search.placeholder = '🔍 搜索球队(如:皇马 / 迈阿密 / Real)';
+    const sortSel = el('select', 'team-sort');
+    const sortOpts = [['league', '按联赛(默认)'], ['name', '按队名']];
+    for (const [v, label] of sortOpts) {
+      const o = el('option', '', label);
+      o.value = v;
+      sortSel.appendChild(o);
     }
+    controls.appendChild(search);
+    controls.appendChild(sortSel);
+    view.appendChild(controls);
+
+    const area = el('div');
+    view.appendChild(area);
+
+    function drawGrid() {
+      area.innerHTML = '';
+      const q = norm(search.value);
+      const all = [];
+      for (const lg of soccerIndex.leagues)
+        for (const t of lg.teams) {
+          const zh = zhOf(t.displayName);
+          const id = lg.id + ':' + t.id;
+          const rosterN = soccerIndex.players.filter(p => p.league === lg.id && p.team === t.id).length;
+          const aliases = NBA_DATA.soccerTeamAliases || {};
+          const aliasHit = aliases[q] && aliases[q] === zh;
+          if (q && !(norm(zh).includes(q) || norm(t.displayName).includes(q) || aliasHit)) continue;
+          all.push({ lg, t, zh, id, rosterN });
+        }
+      if (sortSel.value === 'name') all.sort((a, b) => a.zh.localeCompare(b.zh, 'zh-Hans-CN'));
+      else all.sort((a, b) => a.lg.zh.localeCompare(b.lg.zh, 'zh-Hans-CN'));
+      /* 分组渲染 */
+      let lastLg = null, grid = null;
+      for (const item of all) {
+        if (item.lg.id !== lastLg) {
+          lastLg = item.lg.id;
+          area.appendChild(el('div', 'conf-title', item.lg.zh + ' · ' + item.lg.teams.length + ' 队'));
+          grid = el('div', 'team-grid');
+          area.appendChild(grid);
+        }
+        const card = el('div', 'team-card');
+        card.style.setProperty('--tc', '#c95a24');
+        card.appendChild(el('div', 'abbr', (item.t.abbreviation || item.t.name).slice(0, 3).toUpperCase()));
+        card.appendChild(el('div', 'tname', item.zh));
+        card.appendChild(el('div', 'tcity', item.t.displayName));
+        const meta = el('div', 'tmeta');
+        meta.appendChild(el('span', 'chip orange', '📍 ' + (item.t.arena || item.t.location || '')));
+        meta.appendChild(el('span', 'chip', '👥 ' + item.rosterN + ' 人'));
+        if (isMyTeam('football', item.id)) meta.appendChild(el('span', 'chip gold', '⭐ 主队'));
+        card.appendChild(meta);
+        card.onclick = () => { location.hash = '#/team/football/' + item.id; };
+        grid.appendChild(card);
+      }
+    }
+    search.addEventListener('input', drawGrid);
+    sortSel.addEventListener('change', drawGrid);
+    drawGrid();
   }
 
   function renderRacketHome(view) {
     const data = sport === 'tt' ? ttPlayers : bdPlayers;
     const title = sport === 'tt' ? '中国乒乓 & 世界名将' : '羽坛名将';
     view.appendChild(el('div', 'conf-title', title));
+    const controls = el('div', 'home-controls');
+    const search = el('input', 'team-search');
+    search.type = 'text';
+    search.placeholder = '🔍 搜索名将(如:马龙 / 林丹)';
+    controls.appendChild(search);
+    view.appendChild(controls);
     const grid = el('div', 'player-chip-grid');
-    data.forEach((p, i) => {
-      const chip = el('div', 'player-chip fade-in stagger-' + Math.min(3, i % 3 + 1));
-      chip.appendChild(portraitThumb(p.name));
-      chip.appendChild(el('span', 'jersey', p.sex === '女' ? '♀' : '♂'));
-      const nmWrap = el('div', '');
-      nmWrap.appendChild(el('div', 'nm', p.zh + ' · ' + p.name));
-      nmWrap.appendChild(el('div', 'zh', p.team + (p.event ? ' · ' + p.event : '')));
-      chip.appendChild(nmWrap);
-      chip.appendChild(el('span', 'ps', p.career.peakRank));
-      chip.onclick = () => { location.hash = '#/player/' + sport + '/' + i; };
-      grid.appendChild(chip);
-    });
+    function drawGrid() {
+      grid.innerHTML = '';
+      const q = norm(search.value);
+      data.filter(p => !q || norm(p.name).includes(q) || norm(p.zh).includes(q) || norm(p.team).includes(q))
+        .forEach((p, idx) => {
+          const realIdx = data.indexOf(p);
+          const chip = el('div', 'player-chip fade-in stagger-' + Math.min(3, idx % 3 + 1));
+          chip.appendChild(portraitThumb(p.name));
+          chip.appendChild(el('span', 'jersey', p.sex === '女' ? '♀' : '♂'));
+          const nmWrap = el('div', '');
+          nmWrap.appendChild(el('div', 'nm', p.zh + ' · ' + p.name));
+          nmWrap.appendChild(el('div', 'zh', p.team + (p.event ? ' · ' + p.event : '')));
+          chip.appendChild(nmWrap);
+          chip.appendChild(el('span', 'ps', p.career.peakRank));
+          chip.onclick = () => { location.hash = '#/player/' + sport + '/' + realIdx; };
+          grid.appendChild(chip);
+        });
+    }
+    search.addEventListener('input', drawGrid);
+    drawGrid();
     view.appendChild(grid);
   }
 
@@ -266,6 +416,9 @@
     facts.appendChild(el('span', 'chip', t.div + ' · ' + t.conf + '联盟'));
     info.appendChild(facts);
     info.appendChild(el('div', 'desc', t.desc));
+    const favBtn = el('button', 'btn-main fav-btn', isMyTeam('basketball', t.id) ? '✓ 我的主队' : '☆ 设为主队');
+    favBtn.onclick = () => { toggleMyTeam('basketball', t.id, t.name, t.name); render(); };
+    info.appendChild(favBtn);
     head.appendChild(info);
     view.appendChild(head);
 
@@ -310,6 +463,10 @@
     facts.appendChild(el('span', 'chip orange', '🏟️ ' + (t.arena || t.location || '—')));
     facts.appendChild(el('span', 'chip', '联赛: ' + lg.zh));
     info.appendChild(facts);
+    const zhT = zhOf(t.displayName);
+    const favBtn = el('button', 'btn-main fav-btn', isMyTeam('football', lgId + ':' + tId) ? '✓ 我的主队' : '☆ 设为主队');
+    favBtn.onclick = () => { toggleMyTeam('football', lgId + ':' + tId, t.displayName, zhT); render(); };
+    info.appendChild(favBtn);
     head.appendChild(info);
     view.appendChild(head);
 
@@ -385,6 +542,10 @@
     ml.appendChild(el('span', 'chip', '球衣 #' + (meta.jersey || '—')));
     ml.appendChild(el('span', 'chip gold', '🏀 实时数据'));
     info.appendChild(ml);
+    const h = '#/player/' + meta.id;
+    const favBtn = el('button', 'btn-main fav-btn', isMyPlayer(h) ? '✓ 已收藏' : '☆ 收藏球星');
+    favBtn.onclick = () => { toggleMyPlayer(meta.name, meta.zh || hn?.zh || '', h); render(); };
+    info.appendChild(favBtn);
     hero.appendChild(info);
     view.appendChild(hero);
 
@@ -466,6 +627,10 @@
     ml.appendChild(el('span', 'chip', '球衣 #' + (meta.jersey || '—')));
     ml.appendChild(el('span', 'chip gold', '⚽ 实时数据'));
     info.appendChild(ml);
+    const h = '#/player/football/' + lgId + ':' + pid;
+    const favBtn = el('button', 'btn-main fav-btn', isMyPlayer(h) ? '✓ 已收藏' : '☆ 收藏球星');
+    favBtn.onclick = () => { toggleMyPlayer(meta.name, meta.zh || hn?.zh || '', h); render(); };
+    info.appendChild(favBtn);
     hero.appendChild(info);
     view.appendChild(hero);
 
@@ -523,6 +688,10 @@
     const ml = el('div', 'meta-line');
     ml.appendChild(el('span', 'chip gold', '⚽ 足球名宿'));
     info.appendChild(ml);
+    const h = location.hash;
+    const favBtn = el('button', 'btn-main fav-btn', isMyPlayer(h) ? '✓ 已收藏' : '☆ 收藏球星');
+    favBtn.onclick = () => { toggleMyPlayer(L.name, L.zh, h); render(); };
+    info.appendChild(favBtn);
     hero.appendChild(info);
     view.appendChild(hero);
 
@@ -579,6 +748,10 @@
     ml.appendChild(el('span', 'chip orange', (p.style || p.event || '')));
     ml.appendChild(el('span', 'chip gold', (sport === 'tt' ? '🏓' : '🏸') + ' ' + SPORTS[sport].label + '名将'));
     info.appendChild(ml);
+    const h = '#/player/' + sport + '/' + id;
+    const favBtn = el('button', 'btn-main fav-btn', isMyPlayer(h) ? '✓ 已收藏' : '☆ 收藏球星');
+    favBtn.onclick = () => { toggleMyPlayer(p.zh, p.name, h); render(); };
+    info.appendChild(favBtn);
     hero.appendChild(info);
     view.appendChild(hero);
 
@@ -618,6 +791,10 @@
     ml.appendChild(el('span', 'chip orange', '位置 ' + L.pos));
     ml.appendChild(el('span', 'chip', '已退役'));
     info.appendChild(ml);
+    const h = location.hash;
+    const favBtn = el('button', 'btn-main fav-btn', isMyPlayer(h) ? '✓ 已收藏' : '☆ 收藏球星');
+    favBtn.onclick = () => { toggleMyPlayer(L.name, L.zh, h); render(); };
+    info.appendChild(favBtn);
     hero.appendChild(info);
     view.appendChild(hero);
 
