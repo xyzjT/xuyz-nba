@@ -19,6 +19,7 @@
   const soccerLegends = NBA_DATA.soccerLegends || []; // 足球名宿
   const soccerPeriods = NBA_DATA.soccerPeriods || {}; // 巨星分时期数据(ESPN 实时)
   const soccerPeriodsExtra = NBA_DATA.soccerPeriodsExtra || {}; // 历史时期人工补充
+  const portraits = NBA_DATA.portraits || {}; // 维基照片(自托管)
   /* 合并:同联赛实时优先,人工补全缺失时期,按赛季排序 */
   function mergedPeriods(name) {
     const live = soccerPeriods[name] || [];
@@ -128,12 +129,13 @@
       document.body.appendChild(backdropEl);
     }
     const img = el('img');
-    img.src = url;
     img.alt = '';
     img.onload = () => backdropEl.classList.add('loaded');
     img.onerror = () => { if (backdropEl) { backdropEl.remove(); backdropEl = null; } };
     backdropEl.innerHTML = '';
     backdropEl.appendChild(img);
+    img.src = url; // 先绑事件再设 src,避免缓存命中时错过 onload
+    if (img.complete && img.naturalWidth > 0) backdropEl.classList.add('loaded');
   }
 
   /* ---------- 视图路由 ---------- */
@@ -228,6 +230,7 @@
     const grid = el('div', 'player-chip-grid');
     data.forEach((p, i) => {
       const chip = el('div', 'player-chip fade-in stagger-' + Math.min(3, i % 3 + 1));
+      chip.appendChild(portraitThumb(p.name));
       chip.appendChild(el('span', 'jersey', p.sex === '女' ? '♀' : '♂'));
       const nmWrap = el('div', '');
       nmWrap.appendChild(el('div', 'nm', p.zh + ' · ' + p.name));
@@ -362,6 +365,7 @@
       api(API_BASE.basketball, '/athletes/' + id),
     ]);
     if (detailJ.status === 'fulfilled' && detailJ.value?.headshot?.href) setPlayerBackdrop(detailJ.value.headshot.href);
+    else if (portraits[meta.name]) setPlayerBackdrop(portraits[meta.name].file);
     const career = careerJ.status === 'fulfilled' ? parseBasketball(careerJ.value) : null;
     const cur = curJ.status === 'fulfilled' && curJ.value && !curJ.value.error ? parseBasketball(curJ.value) : null;
     const last = lastJ.status === 'fulfilled' && lastJ.value && !lastJ.value.error ? parseBasketball(lastJ.value) : null;
@@ -447,6 +451,7 @@
     ]);
     const stats = statsJ[0].status === 'fulfilled' ? parseFootball(statsJ[0].value) : null;
     if (statsJ[1].status === 'fulfilled' && statsJ[1].value?.headshot?.href) setPlayerBackdrop(statsJ[1].value.headshot.href);
+    else if (portraits[meta.name]) setPlayerBackdrop(portraits[meta.name].file);
     const hn = soccerHonors.find(h => norm(h.name) === norm(meta.name)) || soccerHonors.find(h => norm(h.name).includes(norm(meta.name.split(' ')[1] || '')));
 
     view.innerHTML = '';
@@ -507,6 +512,8 @@
     const view = $('#view');
     $('#crumb-now').textContent = L.zh;
     view.innerHTML = '';
+    const pt = portraits[L.name];
+    if (pt) setPlayerBackdrop(pt.file);
     const hero = el('div', 'player-hero');
     hero.style.setProperty('--tc', '#c95a24');
     hero.appendChild(el('div', 'avatar', L.zh[0]));
@@ -560,6 +567,8 @@
     const view = $('#view');
     $('#crumb-now').textContent = p.zh;
     view.innerHTML = '';
+    const pt = portraits[p.name];
+    if (pt) setPlayerBackdrop(pt.file);
     const hero = el('div', 'player-hero');
     hero.style.setProperty('--tc', '#c95a24');
     hero.appendChild(el('div', 'avatar', p.zh[0]));
@@ -598,6 +607,8 @@
     const view = $('#view');
     $('#crumb-now').textContent = L.name;
     view.innerHTML = '';
+    const pt = portraits[L.name];
+    if (pt) setPlayerBackdrop(pt.file);
     const hero = el('div', 'player-hero');
     hero.appendChild(el('div', 'avatar', (L.name[0] || '?').toUpperCase()));
     const info = el('div', '');
@@ -649,19 +660,38 @@
     return g;
   }
   function statRow(k, v) { const r = el('div', 'stat-row'); r.appendChild(el('span', '', k)); r.appendChild(el('b', '', String(v))); return r; }
-  /* ESPN 官方头像缩略图:优先索引内真实 URL,篮球可用固定模式兜底;无头像显示首字母 */
+  /* 头像缩略图回退链:ESPN 索引内 URL → 维基自托管照片 → NBA 固定模式 → 首字母 */
   function headshotThumb(p, sport) {
     const wrap = el('div', 'ph');
     wrap.appendChild(el('span', '', (p.name || '?')[0].toUpperCase()));
-    const url = p.hs || (sport === 'nba' ? `https://a.espncdn.com/i/headshots/nba/players/full/${p.id}.png` : null);
+    const url = p.hs
+      || (portraits[p.name] ? portraits[p.name].file : null)
+      || (sport === 'nba' ? `https://a.espncdn.com/i/headshots/nba/players/full/${p.id}.png` : null);
     if (!url) { wrap.classList.add('fail'); return wrap; }
     const img = el('img');
     img.loading = 'lazy';
     img.alt = '';
-    img.src = url;
     img.onload = () => wrap.classList.add('ok');
     img.onerror = () => { wrap.classList.add('fail'); };
     wrap.appendChild(img);
+    img.src = url;
+    if (img.complete && img.naturalWidth > 0) wrap.classList.add('ok');
+    return wrap;
+  }
+  /* 维基自托管照片:缩略图(名宿/乒乓/羽毛球用) */
+  function portraitThumb(name) {
+    const pt = portraits[name];
+    const wrap = el('div', 'ph');
+    wrap.appendChild(el('span', '', (name || '?')[0].toUpperCase()));
+    if (!pt) { wrap.classList.add('fail'); return wrap; }
+    const img = el('img');
+    img.loading = 'lazy';
+    img.alt = '';
+    img.onload = () => wrap.classList.add('ok');
+    img.onerror = () => { wrap.classList.add('fail'); };
+    wrap.appendChild(img);
+    img.src = pt.file;
+    if (img.complete && img.naturalWidth > 0) wrap.classList.add('ok');
     return wrap;
   }
 
