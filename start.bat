@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
-title NBA 数据馆
-set URL=http://127.0.0.1:8123/xuyz-nba
+title 球坛档案馆
+set URL=http://127.0.0.1:8123/xuyz-sports
 
 rem 服务器已在运行 → 直接打开浏览器
 curl -s -o nul --max-time 2 "%URL%"
