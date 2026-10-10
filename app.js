@@ -16,6 +16,7 @@
   const legends = NBA_DATA.legends || [];           // 篮球名宿
   const soccerIndex = (NBA_DATA.soccerIndex || { leagues: [], players: [] }); // 足球索引
   const soccerHonors = NBA_DATA.soccerHonors || []; // 足球荣誉
+  const soccerLegends = NBA_DATA.soccerLegends || []; // 足球名宿
   const soccerZh = NBA_DATA.soccerTeamsZh || {};    // 足球球队中文名(displayName -> zh)
   const ttPlayers = NBA_DATA.tt || [];              // 乒乓球
   const bdPlayers = NBA_DATA.bd || [];              // 羽毛球
@@ -388,6 +389,12 @@
 
   async function renderFootballPlayer(id) {
     const view = $('#view');
+    /* 足球名宿(本地数据) */
+    const legIdx = id.startsWith('L') ? parseInt(id.slice(1), 10) : -1;
+    if (legIdx >= 0 && soccerLegends[legIdx]) {
+      renderSoccerLegend(soccerLegends[legIdx]);
+      return;
+    }
     const [lgId, pid] = String(id).split(':');
     const meta = soccerIndex.players.find(p => p.league === lgId && p.id === pid);
     if (!meta) {
@@ -436,6 +443,42 @@
     } else {
       carCard.appendChild(el('div', 'error-box', '生涯数据暂不可用'));
     }
+    cards.appendChild(carCard);
+    view.appendChild(cards);
+  }
+
+  function renderSoccerLegend(L) {
+    const view = $('#view');
+    $('#crumb-now').textContent = L.zh;
+    view.innerHTML = '';
+    const hero = el('div', 'player-hero');
+    hero.style.setProperty('--tc', '#c95a24');
+    hero.appendChild(el('div', 'avatar', L.zh[0]));
+    const info = el('div', '');
+    info.appendChild(el('h2', '', L.zh + ' · ' + L.name));
+    info.appendChild(el('div', 'zh-name', L.pos + ' · ' + L.team + ' · 已退役'));
+    const ml = el('div', 'meta-line');
+    ml.appendChild(el('span', 'chip gold', '⚽ 足球名宿'));
+    info.appendChild(ml);
+    hero.appendChild(info);
+    view.appendChild(hero);
+
+    const strip = el('div', 'honor-strip');
+    L.honors.forEach(h => strip.appendChild(el('span', 'honor-badge', h)));
+    view.appendChild(strip);
+
+    const cards = el('div', 'stats-cards');
+    const carCard = el('div', 'stats-card');
+    carCard.appendChild(el('h3', '', '📜 生涯数据(人工整理)'));
+    const g = el('div', 'stat-grid');
+    const cell = (v, k) => { const c = el('div', 'stat-cell'); c.appendChild(el('div', 'v', v)); c.appendChild(el('div', 'k', k)); g.appendChild(c); };
+    cell(L.career.goals || '—', '生涯进球'); cell(L.pos, '位置');
+    carCard.appendChild(g);
+    const rows = el('div', 'stat-rows');
+    rows.appendChild(statRow('国家队记录', L.career.intl));
+    rows.appendChild(statRow('生涯点评', L.career.note));
+    carCard.appendChild(rows);
+    carCard.appendChild(el('div', 'note', '退役名宿数据为本地名宿库整理(生涯进球为约数)'));
     cards.appendChild(carCard);
     view.appendChild(cards);
   }
@@ -553,6 +596,10 @@
         if (norm(p.name).includes(q) || (p.zh && p.zh.includes(q))) out.push({ name: p.name, zh: p.zh, meta: (p.pos || '') + ' · ' + p.teamName, hash: '#/player/football/' + p.league + ':' + p.id });
         if (out.length >= 30) return out;
       }
+      soccerLegends.forEach((L, i) => {
+        if (out.length >= 30) return;
+        if (norm(L.name).includes(q) || L.zh.includes(q)) out.push({ name: L.zh + ' · ' + L.name, zh: '名宿 · ' + L.team, meta: L.pos, hash: '#/player/football/L' + i });
+      });
     } else {
       const data = sport === 'tt' ? ttPlayers : bdPlayers;
       data.forEach((p, i) => {
