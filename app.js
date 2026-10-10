@@ -56,22 +56,27 @@
     const val = (cat, name) => { const s = (cats[cat]?.stats || []).find(x => x.name === name); return s ? s.value : null; };
     const gp = val('general', 'gamesPlayed') || 0;
     const points = val('offensive', 'points') ?? 0;
-    const or = val('general', 'offensiveRebounds') ?? 0;
-    const dr = val('general', 'defensiveRebounds') ?? 0;
+    /* 字段分类核实(ESPN API):
+       rebounds/totalRebounds/minutes/gamesPlayed → general
+       points/assists/turnovers/offensiveRebounds/投篮数据 → offensive
+       blocks/defensiveRebounds/steals → defensive */
+    const rebounds = val('general', 'rebounds') ?? val('general', 'totalRebounds') ?? 0;
+    const assists = val('offensive', 'assists') ?? 0;
+    const steals = val('defensive', 'steals') ?? 0;
+    const blocks = val('defensive', 'blocks') ?? 0;
+    const turnovers = val('offensive', 'turnovers') ?? 0;
+    const mins = val('general', 'minutes') ?? 0;
     const fgm = val('offensive', 'fieldGoalsMade') ?? 0;
     const fga = val('offensive', 'fieldGoalsAttempted') ?? 0;
     const tpm = val('offensive', 'threePointFieldGoalsMade') ?? 0;
     const tpa = val('offensive', 'threePointFieldGoalsAttempted') ?? 0;
     const ftm = val('offensive', 'freeThrowsMade') ?? 0;
     const fta = val('offensive', 'freeThrowsAttempted') ?? 0;
-    const mins = val('general', 'minutes') ?? 0;
     return {
-      gp, points, rebounds: or + dr, assists: val('offensive', 'assists') ?? 0,
-      steals: val('defensive', 'steals') ?? 0, blocks: val('defensive', 'blocks') ?? 0,
-      turnovers: val('general', 'turnovers') ?? 0, minutes: mins,
+      gp, points, rebounds, assists, steals, blocks, turnovers, minutes: mins,
       fgPct: fga ? (fgm / fga * 100) : null, tpPct: tpa ? (tpm / tpa * 100) : null, ftPct: fta ? (ftm / fta * 100) : null,
-      avgPoints: gp ? (points / gp) : null, avgReb: gp ? ((or + dr) / gp) : null,
-      avgAst: gp ? ((val('offensive', 'assists') ?? 0) / gp) : null, avgMin: gp ? (mins / gp) : null,
+      avgPoints: gp ? (points / gp) : null, avgReb: gp ? (rebounds / gp) : null,
+      avgAst: gp ? (assists / gp) : null, avgMin: gp ? (mins / gp) : null,
     };
   }
 
