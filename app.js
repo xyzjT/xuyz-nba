@@ -17,6 +17,17 @@
   const soccerIndex = (NBA_DATA.soccerIndex || { leagues: [], players: [] }); // 足球索引
   const soccerHonors = NBA_DATA.soccerHonors || []; // 足球荣誉
   const soccerLegends = NBA_DATA.soccerLegends || []; // 足球名宿
+  const soccerPeriods = NBA_DATA.soccerPeriods || {}; // 巨星分时期数据(ESPN 实时)
+  const soccerPeriodsExtra = NBA_DATA.soccerPeriodsExtra || {}; // 历史时期人工补充
+  /* 合并:同联赛实时优先,人工补全缺失时期,按赛季排序 */
+  function mergedPeriods(name) {
+    const live = soccerPeriods[name] || [];
+    const extra = soccerPeriodsExtra[name] || [];
+    const byLeague = new Map();
+    for (const p of extra) byLeague.set(p.league, p);
+    for (const p of live) byLeague.set(p.league, p);
+    return [...byLeague.values()].sort((a, b) => (a.seasons || '').localeCompare(b.seasons || ''));
+  }
   const soccerZh = NBA_DATA.soccerTeamsZh || {};    // 足球球队中文名(displayName -> zh)
   const ttPlayers = NBA_DATA.tt || [];              // 乒乓球
   const bdPlayers = NBA_DATA.bd || [];              // 羽毛球
@@ -433,17 +444,34 @@
 
     const cards = el('div', 'stats-cards');
     const carCard = el('div', 'stats-card');
-    carCard.appendChild(el('h3', '', '📜 生涯数据(ESPN 实时)'));
+    carCard.appendChild(el('h3', '', '📜 现役联赛生涯(ESPN 实时)'));
     if (stats && stats.gp > 0) {
       const g = el('div', 'stat-grid');
       const cell = (v, k) => { const c = el('div', 'stat-cell'); c.appendChild(el('div', 'v', v)); c.appendChild(el('div', 'k', k)); g.appendChild(c); };
       cell(stats.gp, '出场'); cell(stats.goals, '总进球'); cell(stats.yellow, '黄牌'); cell(stats.red, '红牌');
       carCard.appendChild(g);
-      carCard.appendChild(el('div', 'note', '数据源 ESPN(2025-26 及生涯累计)· 足球接口不含助攻字段'));
+      carCard.appendChild(el('div', 'note', '注意:ESPN 足球数据按联赛分账,此处仅「' + meta.leagueZh + '」时期 · 足球接口不含助攻字段'));
     } else {
       carCard.appendChild(el('div', 'error-box', '生涯数据暂不可用'));
     }
     cards.appendChild(carCard);
+
+    /* 分时期数据(跨联赛全生涯) */
+    const periods = mergedPeriods(meta.name);
+    if (periods && periods.length >= 1) {
+      const pCard = el('div', 'stats-card');
+      pCard.appendChild(el('h3', '', '📅 分时期全记录(跨联赛)'));
+      const rows = el('div', 'stat-rows');
+      for (const p of periods) {
+        const r = el('div', 'stat-row');
+        r.appendChild(el('span', '', p.league + ' · ' + p.seasons + (p.curated ? ' *' : '')));
+        r.appendChild(el('b', '', p.apps + ' 场 · ' + p.goals + ' 球'));
+        rows.appendChild(r);
+      }
+      pCard.appendChild(rows);
+      pCard.appendChild(el('div', 'note', '* 为人工整理的历史时期(ESPN 历史窗口外的记录);其余为 ESPN 实时数据'));
+      cards.appendChild(pCard);
+    }
     view.appendChild(cards);
   }
 
@@ -478,8 +506,25 @@
     rows.appendChild(statRow('国家队记录', L.career.intl));
     rows.appendChild(statRow('生涯点评', L.career.note));
     carCard.appendChild(rows);
-    carCard.appendChild(el('div', 'note', '退役名宿数据为本地名宿库整理(生涯进球为约数)'));
+    carCard.appendChild(el('div', 'note', '名宿数据为本地名宿库整理(生涯进球为约数)'));
     cards.appendChild(carCard);
+
+    /* 名宿也有分时期记录(C罗/内马尔等) */
+    const periods = mergedPeriods(L.name);
+    if (periods && periods.length) {
+      const pCard = el('div', 'stats-card');
+      pCard.appendChild(el('h3', '', '📅 分时期全记录(跨联赛)'));
+      const prows = el('div', 'stat-rows');
+      for (const p of periods) {
+        const r = el('div', 'stat-row');
+        r.appendChild(el('span', '', p.league + ' · ' + p.seasons + (p.curated ? ' *' : '')));
+        r.appendChild(el('b', '', p.apps + ' 场 · ' + p.goals + ' 球'));
+        prows.appendChild(r);
+      }
+      pCard.appendChild(prows);
+      pCard.appendChild(el('div', 'note', '* 为人工整理的历史时期;其余为 ESPN 实时数据'));
+      cards.appendChild(pCard);
+    }
     view.appendChild(cards);
   }
 
@@ -589,7 +634,7 @@
       }
       legends.forEach((L, i) => {
         if (out.length >= 30) return;
-        if (norm(L.name).includes(q) || L.zh.includes(q)) out.push({ name: L.name, zh: L.zh, meta: '名宿 · ' + L.team, hash: '#/player/L' + i });
+        if (norm(L.name).includes(q) || norm(L.zh).includes(q)) out.push({ name: L.name, zh: L.zh, meta: '名宿 · ' + L.team, hash: '#/player/L' + i });
       });
     } else if (sport === 'football') {
       for (const p of soccerIndex.players) {
@@ -598,7 +643,7 @@
       }
       soccerLegends.forEach((L, i) => {
         if (out.length >= 30) return;
-        if (norm(L.name).includes(q) || L.zh.includes(q)) out.push({ name: L.zh + ' · ' + L.name, zh: '名宿 · ' + L.team, meta: L.pos, hash: '#/player/football/L' + i });
+        if (norm(L.name).includes(q) || norm(L.zh).includes(q)) out.push({ name: L.zh + ' · ' + L.name, zh: '名宿 · ' + L.team, meta: L.pos, hash: '#/player/football/L' + i });
       });
     } else {
       const data = sport === 'tt' ? ttPlayers : bdPlayers;
