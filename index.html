@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NBA 数据馆 · 30 队 & 球员数据库</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="textured-bg">
+
+<div id="court-grid"></div>
+
+<header id="hero" class="fade-in stagger-1">
+  <div class="hero-left">
+    <div class="hero-kicker">🏀 THE ASSOCIATION</div>
+    <h1>NBA 数据馆</h1>
+    <p class="hero-sub">三十支球队 · 实时球员数据 · 荣誉与生涯档案</p>
+  </div>
+  <div class="hero-right">
+    <div id="search-wrap">
+      <input id="search-input" type="text" placeholder="搜索球员(支持中英文,如:詹姆斯 / LeBron / 姚明)" autocomplete="off">
+      <div id="search-suggest"></div>
+    </div>
+  </div>
+</header>
+
+<nav id="crumb" class="fade-in stagger-2">
+  <a href="#/" id="crumb-home">🏠 全部球队</a>
+  <span id="crumb-sep" hidden> / </span><span id="crumb-now"></span>
+</nav>
+
+<main id="view"></main>
+
+<footer id="foot">
+  <span>数据实时来自 ESPN Stats API(2026-27 赛季)</span>
+  <span>· 荣誉库人工整理 · 常规赛开赛后当赛季数据自动更新</span>
+</footer>
+
+<script src="data/teams.js"></script>
+<script src="data/live_index.js"></script>
+<script src="data/honors.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
