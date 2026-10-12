@@ -43,7 +43,7 @@
           return;
         }
         const s = document.createElement('script');
-        s.src = EXTRA_SCRIPTS[i++] + '?v=7';
+        s.src = EXTRA_SCRIPTS[i++] + '?v=8';
         s.onload = next;
         s.onerror = next;
         document.body.appendChild(s);
