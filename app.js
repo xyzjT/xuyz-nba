@@ -12,14 +12,60 @@
 
   const teams = NBA_DATA.teams || [];               // 篮球球队(静态)
   const liveIndex = (NBA_DATA.liveIndex || { teams: [], players: [] }); // 篮球球员索引
-  const honors = NBA_DATA.honors || [];             // 篮球荣誉
-  const legends = NBA_DATA.legends || [];           // 篮球名宿
-  const soccerIndex = (NBA_DATA.soccerIndex || { leagues: [], players: [] }); // 足球索引
-  const soccerHonors = NBA_DATA.soccerHonors || []; // 足球荣誉
-  const soccerLegends = NBA_DATA.soccerLegends || []; // 足球名宿
-  const soccerPeriods = NBA_DATA.soccerPeriods || {}; // 巨星分时期数据(ESPN 实时)
-  const soccerPeriodsExtra = NBA_DATA.soccerPeriodsExtra || {}; // 历史时期人工补充
-  const portraits = NBA_DATA.portraits || {}; // 维基照片(自托管)
+  /* tier2 数据懒加载:首屏仅需篮球基础数据,其余按需注入(性能优化) */
+  let honors = NBA_DATA.honors || [];
+  let legends = NBA_DATA.legends || [];
+  let soccerIndex = (NBA_DATA.soccerIndex || { leagues: [], players: [] });
+  let soccerHonors = NBA_DATA.soccerHonors || [];
+  let soccerLegends = NBA_DATA.soccerLegends || [];
+  let soccerPeriods = NBA_DATA.soccerPeriods || {};
+  let soccerPeriodsExtra = NBA_DATA.soccerPeriodsExtra || {};
+  let portraits = NBA_DATA.portraits || {};
+  let ttPlayers = NBA_DATA.tt || [];
+  let bdPlayers = NBA_DATA.bd || [];
+  const EXTRA_SCRIPTS = [
+    'data/honors.js', 'data/soccer_teams_zh.js', 'data/soccer_index.js', 'data/soccer_honors.js',
+    'data/soccer_legends.js', 'data/soccer_periods.js', 'data/soccer_periods_extra.js',
+    'data/portraits.js', 'data/tt_players.js', 'data/bd_players.js',
+  ];
+  let extrasLoaded = false;
+  let extrasPromise = null;
+  function loadExtras() {
+    if (extrasLoaded) return Promise.resolve();
+    if (extrasPromise) return extrasPromise;
+    extrasPromise = new Promise(res => {
+      let i = 0;
+      const next = () => {
+        if (i >= EXTRA_SCRIPTS.length) {
+          refreshTier2();
+          extrasLoaded = true;
+          res();
+          return;
+        }
+        const s = document.createElement('script');
+        s.src = EXTRA_SCRIPTS[i++] + '?v=7';
+        s.onload = next;
+        s.onerror = next;
+        document.body.appendChild(s);
+      };
+      next();
+    });
+    return extrasPromise;
+  }
+  function refreshTier2() {
+    honors = NBA_DATA.honors || [];
+    legends = NBA_DATA.legends || [];
+    soccerIndex = NBA_DATA.soccerIndex || { leagues: [], players: [] };
+    soccerHonors = NBA_DATA.soccerHonors || [];
+    soccerLegends = NBA_DATA.soccerLegends || [];
+    soccerPeriods = NBA_DATA.soccerPeriods || {};
+    soccerPeriodsExtra = NBA_DATA.soccerPeriodsExtra || {};
+    portraits = NBA_DATA.portraits || {};
+    ttPlayers = NBA_DATA.tt || [];
+    bdPlayers = NBA_DATA.bd || [];
+    soccerZhNorm = {};
+    for (const k in NBA_DATA.soccerTeamsZh || {}) soccerZhNorm[norm(k)] = NBA_DATA.soccerTeamsZh[k];
+  }
   /* 合并:同联赛实时优先,人工补全缺失时期,按赛季排序 */
   function mergedPeriods(name) {
     const live = soccerPeriods[name] || [];
@@ -29,9 +75,7 @@
     for (const p of live) byLeague.set(p.league, p);
     return [...byLeague.values()].sort((a, b) => (a.seasons || '').localeCompare(b.seasons || ''));
   }
-  const soccerZh = NBA_DATA.soccerTeamsZh || {};    // 足球球队中文名(displayName -> zh)
-  const ttPlayers = NBA_DATA.tt || [];              // 乒乓球
-  const bdPlayers = NBA_DATA.bd || [];              // 羽毛球
+  let soccerZh = NBA_DATA.soccerTeamsZh || {};    // 足球球队中文名(displayName -> zh)
 
   const SPORTS = {
     basketball: { label: '篮球', icon: '🏀' },
@@ -140,9 +184,12 @@
   }
 
   /* 足球球队中文名模糊匹配(去重音/大小写),兜底英文 */
-  const soccerZhNorm = {};
+  let soccerZhNorm = {};
   for (const k in soccerZh) soccerZhNorm[norm(k)] = soccerZh[k];
-  const zhOf = n => soccerZh[n] || soccerZhNorm[norm(n)] || n;
+  const zhOf = n => {
+    const zh = NBA_DATA.soccerTeamsZh || {};
+    return zh[n] || soccerZhNorm[norm(n)] || n;
+  };
 
   /* ESPN 篮球数字 ID ↔ 本地 slug 映射 */
   const teamByLiveId = {};
@@ -269,6 +316,11 @@
     $('#crumb-now').textContent = '';
     const view = $('#view');
     view.innerHTML = '';
+    if (sport !== 'basketball' && !extrasLoaded) {
+      view.appendChild(el('div', 'loading', '数据加载中(首次加载稍候)'));
+      loadExtras().then(() => render());
+      return;
+    }
     renderPkPanel(view);
     if (sport === 'basketball') renderBasketballHome(view);
     else if (sport === 'football') renderFootballHome(view);
@@ -282,6 +334,7 @@
     search.type = 'text';
     search.placeholder = '🔍 搜索球队(如:湖人 / Lakers)';
     const sortSel = el('select', 'team-sort');
+    sortSel.setAttribute('aria-label', '球队排序方式');
     const sortOpts = [['default', '默认排序'], ['champs', '冠军数 ↓'], ['founded', '成立年份 ↑'], ['conf', '按赛区']];
     for (const [v, label] of sortOpts) {
       const o = el('option', '', label);
@@ -346,6 +399,7 @@
     search.type = 'text';
     search.placeholder = '🔍 搜索球队(如:皇马 / 迈阿密 / Real)';
     const sortSel = el('select', 'team-sort');
+    sortSel.setAttribute('aria-label', '球队排序方式');
     const sortOpts = [['league', '按联赛(默认)'], ['name', '按队名']];
     for (const [v, label] of sortOpts) {
       const o = el('option', '', label);
@@ -533,13 +587,18 @@
     view.appendChild(el('div', 'loading', '正在拉取数据'));
 
     if (sport === 'tt' || sport === 'bd') {
+      if (!extrasLoaded) { loadExtras().then(() => render()); return; }
       const data = sport === 'tt' ? ttPlayers : bdPlayers;
       const p = data[parseInt(id, 10)];
       if (p) renderRacketPlayer(p);
       else { view.innerHTML = ''; view.appendChild(el('div', 'error-box', '未找到该运动员')); }
       return;
     }
-    if (sport === 'football') { await renderFootballPlayer(id); return; }
+    if (sport === 'football') {
+      if (!extrasLoaded) { await loadExtras(); }
+      await renderFootballPlayer(id);
+      return;
+    }
 
     /* ---- 篮球 ---- */
     const legIdx = id.startsWith('L') ? parseInt(id.slice(1), 10) : -1;
@@ -1007,6 +1066,7 @@
   function search(q) {
     q = norm(q.trim());
     if (!q) return [];
+    if (!extrasLoaded) loadExtras(); // 后台预热
     const out = [];
     if (sport === 'basketball') {
       for (const p of liveIndex.players) {

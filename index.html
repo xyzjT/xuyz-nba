@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="球坛档案馆:篮球/足球/乒乓球/羽毛球运动员数据一站式查询,实时数据、荣誉库、球星PK。">
+<meta name="theme-color" content="#141210">
 <title>球坛档案馆 · 篮球/足球/乒乓球/羽毛球运动员数据库</title>
+<link rel="preconnect" href="https://sports.core.api.espn.com">
+<link rel="preconnect" href="https://a.espncdn.com">
 <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body class="textured-bg">
@@ -22,7 +26,7 @@
   </div>
   <div class="hero-right">
     <div id="search-wrap">
-      <input id="search-input" type="text" placeholder="搜索球员(支持中英文,如:詹姆斯 / LeBron / 姚明)" autocomplete="off">
+      <input id="search-input" type="text" placeholder="搜索球员(支持中英文,如:詹姆斯 / LeBron / 姚明)" autocomplete="off" aria-label="搜索运动员">
       <div id="search-suggest"></div>
     </div>
   </div>
@@ -43,16 +47,6 @@
 
 <script src="data/teams.js?v=7"></script>
 <script src="data/live_index.js?v=7"></script>
-<script src="data/honors.js?v=7"></script>
-<script src="data/soccer_teams_zh.js?v=7"></script>
-<script src="data/soccer_index.js?v=7"></script>
-<script src="data/soccer_honors.js?v=7"></script>
-<script src="data/soccer_legends.js?v=7"></script>
-<script src="data/soccer_periods.js?v=7"></script>
-<script src="data/soccer_periods_extra.js?v=7"></script>
-<script src="data/portraits.js?v=7"></script>
-<script src="data/tt_players.js?v=7"></script>
-<script src="data/bd_players.js?v=7"></script>
 <script src="app.js?v=7"></script>
 </body>
 </html>

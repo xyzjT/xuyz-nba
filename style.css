@@ -17,7 +17,7 @@
   --accent-2: #c9a06a;   /* 暖砂金,只作成就点缀 */
   --wood: #8a4a2b;
   --text-primary: #f0e8dc;
-  --text-secondary: #9d9284;
+  --text-secondary: #a89d8c;
   --shadow-warm: rgba(24, 12, 4, 0.45);
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -316,7 +316,7 @@ h1 {
 .sport-tab {
   background: var(--bg-secondary);
   border: 1px solid #34302a;
-  color: var(--text-secondary);
+  color: #bdb2a0;
   border-radius: 999px;
   padding: 8px 18px;
   font-size: 14px;
@@ -694,4 +694,10 @@ h1 {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+/* 键盘焦点可见性(无障碍) */
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent-1);
+  outline-offset: 2px;
 }
